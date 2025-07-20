@@ -4,7 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navigation from './components/Navigation'
 import Login from './pages/Login'
-import Register from './pages/Register'
+import ComprehensiveRegister from './pages/ComprehensiveRegister'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 import HRDashboard from './pages/HRDashboard'
 
@@ -16,7 +16,7 @@ function App() {
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route path="/register" element={<ComprehensiveRegister />} />
             
             {/* Protected routes */}
             <Route 

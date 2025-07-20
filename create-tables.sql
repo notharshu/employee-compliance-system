@@ -15,15 +15,105 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
--- 3. Create profiles table (extends auth.users)
+-- 3. Create department enum type
+DO $$ BEGIN
+    CREATE TYPE department_type AS ENUM (
+        'mining_operations',
+        'safety_department',
+        'human_resources',
+        'finance_accounts',
+        'engineering_technical',
+        'environment_forestry',
+        'medical_health',
+        'security',
+        'transport',
+        'stores_purchase',
+        'legal',
+        'administration',
+        'it_systems'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- 4. Create designation enum type
+DO $$ BEGIN
+    CREATE TYPE designation_type AS ENUM (
+        'junior_engineer',
+        'assistant_engineer',
+        'deputy_engineer',
+        'assistant_manager',
+        'deputy_manager',
+        'manager',
+        'deputy_general_manager',
+        'general_manager',
+        'chief_general_manager',
+        'mining_foreman',
+        'mining_mate',
+        'surveyor',
+        'safety_officer',
+        'medical_officer',
+        'security_officer',
+        'clerk',
+        'assistant',
+        'technician',
+        'operator',
+        'driver',
+        'helper',
+        'other'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- 5. Create profiles table (extends auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT,
+    email TEXT NOT NULL,
     role user_role DEFAULT 'employee',
-    first_name TEXT,
-    last_name TEXT,
+    
+    -- Personal Information
+    first_name TEXT NOT NULL,
+    middle_name TEXT,
+    last_name TEXT NOT NULL,
+    date_of_birth DATE,
+    gender TEXT CHECK (gender IN ('male', 'female', 'other')),
+    blood_group TEXT CHECK (blood_group IN ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-')),
+    
+    -- Contact Information
+    phone_number TEXT,
+    emergency_contact_name TEXT,
+    emergency_contact_phone TEXT,
+    permanent_address TEXT,
+    current_address TEXT,
+    
+    -- Employment Information
+    employee_id TEXT UNIQUE,
+    department department_type,
+    designation designation_type,
+    date_of_joining DATE,
+    reporting_manager TEXT,
+    work_location TEXT,
+    shift_timing TEXT,
+    
+    -- Compliance Information
+    pan_number TEXT,
+    aadhar_number TEXT,
+    pf_number TEXT,
+    esi_number TEXT,
+    bank_account_number TEXT,
+    ifsc_code TEXT,
+    
+    -- Safety & Medical
+    medical_fitness_valid_till DATE,
+    safety_training_valid_till DATE,
+    gas_testing_certificate_valid_till DATE,
+    
+    -- System fields
+    profile_completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
     PRIMARY KEY (id)
 );
 

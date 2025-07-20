@@ -4,12 +4,47 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
 
 const Register = () => {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  
+  // Account Information
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  
+  // Personal Information
+  const [firstName, setFirstName] = useState('')
+  const [middleName, setMiddleName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
+  const [gender, setGender] = useState('')
+  const [bloodGroup, setBloodGroup] = useState('')
+  
+  // Contact Information
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [emergencyContactName, setEmergencyContactName] = useState('')
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
+  const [permanentAddress, setPermanentAddress] = useState('')
+  const [currentAddress, setCurrentAddress] = useState('')
+  
+  // Employment Information
+  const [employeeId, setEmployeeId] = useState('')
+  const [department, setDepartment] = useState('')
+  const [designation, setDesignation] = useState('')
+  const [dateOfJoining, setDateOfJoining] = useState('')
+  const [reportingManager, setReportingManager] = useState('')
+  const [workLocation, setWorkLocation] = useState('')
+  const [shiftTiming, setShiftTiming] = useState('')
+  
+  // Compliance Information
+  const [panNumber, setPanNumber] = useState('')
+  const [aadharNumber, setAadharNumber] = useState('')
+  const [pfNumber, setPfNumber] = useState('')
+  const [esiNumber, setEsiNumber] = useState('')
+  const [bankAccountNumber, setBankAccountNumber] = useState('')
+  const [ifscCode, setIfscCode] = useState('')
   
   const { signUp } = useAuth()
   const navigate = useNavigate()
