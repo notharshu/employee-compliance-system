@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Navigation from './components/Navigation'
 import Login from './pages/Login'
 import ComprehensiveRegister from './pages/ComprehensiveRegister'
+import ResendConfirmation from './pages/ResendConfirmation'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 import HRDashboard from './pages/HRDashboard'
 
@@ -17,6 +18,7 @@ function App() {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<ComprehensiveRegister />} />
+            <Route path="/resend-confirmation" element={<ResendConfirmation />} />
             
             {/* Protected routes */}
             <Route 
