@@ -170,9 +170,6 @@ const HRDashboard = () => {
             <li className="hover:bg-gray-700">
               <Link to="/documents" className="block p-4 text-white no-underline">Documents</Link>
             </li>
-            <li className="hover:bg-gray-700">
-              <Link to="/employees" className="block p-4 text-white no-underline">Employees</Link>
-            </li>
           </ul>
         </nav>
         <div className="p-4">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import CompanyLogo from '../assets/company-logo.svg';
@@ -7,6 +7,7 @@ const Navigation = () => {
   const { user, userProfile, signOut } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -40,7 +41,7 @@ const Navigation = () => {
               <ul className="flex space-x-4">
                 <li>
                   <Link
-                    to={userProfile?.role === 'hr' ? '/hr-dashboard' : '/dashboard'}
+                    to="/dashboard"
                     className={navLinkClass('/dashboard')}
                   >
                     Dashboard
@@ -48,10 +49,35 @@ const Navigation = () => {
                 </li>
 
                 {userProfile?.role === 'hr' && (
-                  <li>
-                    <Link to="/hr-dashboard" className={navLinkClass('/hr-dashboard')}>
-                      HR Dashboard
-                    </Link>
+                  <li className="relative">
+                    <button
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className={`${navLinkClass('/hr-dashboard')} flex items-center space-x-1`}
+                      onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
+                    >
+                      <span>HR Dashboard</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {dropdownOpen && (
+                      <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                        <Link
+                          to="/hr-dashboard"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          HR Dashboard
+                        </Link>
+                        <Link
+                          to="/employees"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() => setDropdownOpen(false)}
+                        >
+                          Employees
+                        </Link>
+                      </div>
+                    )}
                   </li>
                 )}
 
