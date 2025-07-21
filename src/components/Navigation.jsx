@@ -59,6 +59,13 @@ const Navigation = () => {
                       HR Dashboard
                     </Link>
                   )}
+                  
+                  <Link
+                    to="/profile"
+                    className={navLinkClass('/profile')}
+                  >
+                    Profile
+                  </Link>
                 </div>
 
                 <div className="flex items-center space-x-3 border-l border-gray-200 pl-4">

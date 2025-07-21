@@ -19,7 +19,24 @@ const Login = () => {
     try {
       const { error } = await signIn(email, password)
       if (error) {
-        setError(error.message)
+        // Check if the error is due to unconfirmed email
+        if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
+          setError(
+            <div>
+              <p>Your email address hasn't been verified yet.</p>
+              <a 
+                href="https://employee-compliance-system.vercel.app/resend-confirmation" 
+                className="text-primary-600 hover:text-primary-500 underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Click here to resend verification email
+              </a>
+            </div>
+          )
+        } else {
+          setError(error.message)
+        }
       } else {
         navigate('/dashboard')
       }

@@ -6,6 +6,7 @@ import Navigation from './components/Navigation'
 import Login from './pages/Login'
 import ComprehensiveRegister from './pages/ComprehensiveRegister'
 import ResendConfirmation from './pages/ResendConfirmation'
+import Profile from './pages/Profile'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 import HRDashboard from './pages/HRDashboard'
 
@@ -36,6 +37,15 @@ function App() {
                 <ProtectedRoute requiredRole="hr">
                   <Navigation />
                   <HRDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/profile" 
+              element={
+                <ProtectedRoute>
+                  <Navigation />
+                  <Profile />
                 </ProtectedRoute>
               } 
             />
