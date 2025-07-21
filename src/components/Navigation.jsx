@@ -49,11 +49,13 @@ const Navigation = () => {
                 </li>
 
                 {userProfile?.role === 'hr' && (
-                  <li className="relative">
+                  <li 
+                    className="relative"
+                    onMouseEnter={() => setDropdownOpen(true)}
+                    onMouseLeave={() => setDropdownOpen(false)}
+                  >
                     <button
-                      onClick={() => setDropdownOpen(!dropdownOpen)}
                       className={`${navLinkClass('/hr-dashboard')} flex items-center space-x-1`}
-                      onBlur={() => setTimeout(() => setDropdownOpen(false), 200)}
                     >
                       <span>HR Dashboard</span>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,14 +67,12 @@ const Navigation = () => {
                         <Link
                           to="/hr-dashboard"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          onClick={() => setDropdownOpen(false)}
                         >
                           HR Dashboard
                         </Link>
                         <Link
                           to="/employees"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          onClick={() => setDropdownOpen(false)}
                         >
                           Employees
                         </Link>

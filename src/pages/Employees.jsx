@@ -5,8 +5,10 @@ import {
   EyeIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  PlusIcon
 } from '@heroicons/react/24/outline'
+import { supabase } from '../utils/supabase'
 
 const Employees = () => {
   const [employees, setEmployees] = useState([])
@@ -15,61 +17,48 @@ const Employees = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
 
-  // Mock data - replace with actual API call
+  // Fetch employees from Supabase
   useEffect(() => {
-    const mockEmployees = [
-      {
-        id: 1,
-        name: 'John Smith',
-        email: 'john.smith@company.com',
-        role: 'employee',
-        joinedDate: '2023-01-15',
-        documentsCount: 5,
-        status: 'active'
-      },
-      {
-        id: 2,
-        name: 'Sarah Johnson',
-        email: 'sarah.johnson@company.com',
-        role: 'employee',
-        joinedDate: '2023-02-20',
-        documentsCount: 8,
-        status: 'active'
-      },
-      {
-        id: 3,
-        name: 'Mike Wilson',
-        email: 'mike.wilson@company.com',
-        role: 'manager',
-        joinedDate: '2022-11-10',
-        documentsCount: 12,
-        status: 'active'
-      },
-      {
-        id: 4,
-        name: 'Emily Davis',
-        email: 'emily.davis@company.com',
-        role: 'employee',
-        joinedDate: '2023-03-05',
-        documentsCount: 3,
-        status: 'active'
-      },
-      {
-        id: 5,
-        name: 'David Brown',
-        email: 'david.brown@company.com',
-        role: 'employee',
-        joinedDate: '2023-01-28',
-        documentsCount: 7,
-        status: 'inactive'
-      }
-    ]
+    const fetchEmployees = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('profiles')
+          .select(`
+            id,
+            full_name,
+            email,
+            role,
+            created_at
+          `)
+          .order('created_at', { ascending: false })
+        
+        if (error) {
+          console.error('Error fetching employees:', error)
+          return
+        }
 
-    setTimeout(() => {
-      setEmployees(mockEmployees)
-      setFilteredEmployees(mockEmployees)
-      setLoading(false)
-    }, 1000)
+        // Transform the data to match the expected format
+        const transformedEmployees = data.map(profile => ({
+          id: profile.id,
+          name: profile.full_name || 'N/A',
+          email: profile.email || 'N/A',
+          role: profile.role || 'employee',
+          joinedDate: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          documentsCount: 0, // This would need to be calculated from documents table
+          status: 'active' // Default status, could be added to profiles table
+        }))
+
+        setEmployees(transformedEmployees)
+        setFilteredEmployees(transformedEmployees)
+      } catch (error) {
+        console.error('Error fetching employees:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchEmployees()
   }, [])
 
   // Filter and search logic
@@ -136,9 +125,15 @@ const Employees = () => {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center mb-2">
-          <UsersIcon className="h-8 w-8 text-blue-600 mr-3" />
-          <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center">
+            <UsersIcon className="h-8 w-8 text-blue-600 mr-3" />
+            <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
+          </div>
+          <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Add New Employee
+          </button>
         </div>
         <p className="text-gray-600">Manage and view all employee information</p>
       </div>
