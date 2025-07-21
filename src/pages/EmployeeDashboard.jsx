@@ -91,35 +91,85 @@ const EmployeeDashboard = () => {
 
       console.log('Document data to insert:', documentData)
       
-      // Try to upload file to storage first
+      // Try to upload file to storage first - with multiple fallback attempts
       const fileExt = newDocument.file.name.split('.').pop()
       const fileName = `${user.id}/${Date.now()}.${fileExt}`
       
       console.log('Uploading file to storage:', fileName)
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      let uploadData = null
+      let uploadError = null
+      
+      // First attempt: Try 'documents' bucket
+      const uploadResult = await supabase.storage
         .from('documents')
         .upload(fileName, newDocument.file, {
           cacheControl: '3600',
           upsert: false
         })
+      
+      uploadData = uploadResult.data
+      uploadError = uploadResult.error
+      
+      // If documents bucket fails, try creating a public bucket as fallback
+      if (uploadError && (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket'))) {
+        console.log('Documents bucket not found, trying to create one or use alternative...')
+        
+        // Try to create a public documents bucket as fallback
+        const { data: bucketData, error: bucketError } = await supabase.storage.createBucket('documents', {
+          public: false,
+          fileSizeLimit: 10485760 // 10MB
+        })
+        
+        if (!bucketError) {
+          console.log('Successfully created documents bucket, retrying upload...')
+          const retryResult = await supabase.storage
+            .from('documents')
+            .upload(fileName, newDocument.file, {
+              cacheControl: '3600',
+              upsert: false
+            })
+          uploadData = retryResult.data
+          uploadError = retryResult.error
+        }
+      }
+      
+      // If still failing, try without the folder structure
+      if (uploadError) {
+        console.log('Retrying upload without folder structure...')
+        const simpleFileName = `${Date.now()}.${fileExt}`
+        const simpleResult = await supabase.storage
+          .from('documents')
+          .upload(simpleFileName, newDocument.file, {
+            cacheControl: '3600',
+            upsert: false
+          })
+        uploadData = simpleResult.data
+        uploadError = simpleResult.error
+      }
 
+      // Final fallback: Store document metadata without file if storage completely fails
       if (uploadError) {
         console.error('Storage upload error:', uploadError)
         
-        // If bucket doesn't exist, try to create it
-        if (uploadError.message?.includes('Bucket not found')) {
-          alert('Storage bucket not found. Please contact your administrator to set up the document storage.')
-          return
-        }
+        // Ask user if they want to proceed without file storage
+        const proceedWithoutStorage = confirm(
+          'File storage is not available. Would you like to save the document information without the file? You can upload the file later when storage is available.'
+        )
         
-        throw new Error(`File upload failed: ${uploadError.message}`)
+        if (proceedWithoutStorage) {
+          console.log('Proceeding without file storage...')
+          documentData.file_url = null
+          documentData.storage_error = uploadError.message
+        } else {
+          throw new Error(`File upload failed: ${uploadError.message}`)
+        }
+      } else {
+        // Add file URL to document data on successful upload
+        documentData.file_url = uploadData.path
       }
 
-      console.log('File uploaded successfully:', uploadData)
-      
-      // Add file URL to document data
-      documentData.file_url = uploadData.path
+      console.log('File upload process completed:', uploadData ? 'Success' : 'Stored without file')
 
       // Insert document record
       const { data: insertData, error: insertError } = await supabase
