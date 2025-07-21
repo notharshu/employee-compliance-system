@@ -167,26 +167,28 @@ const HRDashboard = () => {
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 justify-center">
+          <div className="bg-white p-6 rounded-lg shadow text-center">
             <h3 className="text-lg font-semibold text-gray-700">Total Documents</h3>
             <p className="text-3xl font-bold text-primary-600">{documents.length}</p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white p-6 rounded-lg shadow text-center">
             <h3 className="text-lg font-semibold text-gray-700">Pending Review</h3>
             <p className="text-3xl font-bold text-yellow-600">
               {documents.filter(d => d.status === 'pending').length}
             </p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div className="bg-white p-6 rounded-lg shadow text-center">
             <h3 className="text-lg font-semibold text-gray-700">Approved</h3>
             <p className="text-3xl font-bold text-green-600">
               {documents.filter(d => d.status === 'approved').length}
             </p>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold text-gray-700">Total Employees</h3>
-            <p className="text-3xl font-bold text-blue-600">{employees.length}</p>
+          <div className="bg-white p-6 rounded-lg shadow text-center">
+            <h3 className="text-lg font-semibold text-gray-700">Rejected</h3>
+            <p className="text-3xl font-bold text-red-600">
+              {documents.filter(d => d.status === 'rejected').length}
+            </p>
           </div>
         </div>
 
