@@ -371,5 +371,5 @@ const HRDashboard = () => {
       </main>
     </div>
   )
-
+}
 export default HRDashboard
