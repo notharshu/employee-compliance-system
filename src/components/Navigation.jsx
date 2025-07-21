@@ -40,7 +40,34 @@ const Navigation = () => {
 
           <div className="flex items-center space-x-4">
             {user && (
-              <>
+                <ul className="flex space-x-4">
+                  <li>
+                    <Link
+                      to={userProfile?.role === 'hr' ? '/hr-dashboard' : '/dashboard'}
+                      className={navLinkClass('/dashboard')}
+                    >
+                      Dashboard
+                    </Link>
+                  </li>
+                  {userProfile?.role === 'hr' && (
+                    <li>
+                      <Link
+                        to="/hr-dashboard"
+                        className={navLinkClass('/hr-dashboard')}
+                      >
+                        HR Dashboard
+                      </Link>
+                    </li>
+                  )}
+                  <li>
+                    <Link
+                      to="/profile"
+                      className={navLinkClass('/profile')}
+                    >
+                      Profile
+                    </Link>
+                  </li>
+                </ul>
                 <div className="flex items-center space-x-4">
                   <Link
                     to="/dashboard"
