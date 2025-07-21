@@ -222,6 +222,42 @@ const EmployeeDashboard = () => {
     }
   }
 
+  const handleDeleteDocument = async (documentId, filePath) => {
+    if (!window.confirm('Are you sure you want to delete this document?')) {
+      return
+    }
+
+    try {
+      // Delete from storage if file exists
+      if (filePath) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([filePath])
+        
+        if (storageError) {
+          console.warn('Failed to delete file from storage:', storageError)
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', documentId)
+
+      if (dbError) {
+        throw new Error(dbError.message)
+      }
+
+      // Refresh documents list
+      await fetchDocuments()
+      alert('Document deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert(`Error deleting document: ${error.message}`)
+    }
+  }
+
   if (loading && documents.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -279,6 +315,9 @@ const EmployeeDashboard = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Uploaded
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -300,6 +339,14 @@ const EmployeeDashboard = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(doc.created_at).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <button
+                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}

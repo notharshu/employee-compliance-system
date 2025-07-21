@@ -111,6 +111,42 @@ const HRDashboard = () => {
     }
   }
 
+  const handleDeleteDocument = async (documentId, filePath) => {
+    if (!window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      // Delete from storage if file exists
+      if (filePath) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([filePath])
+        
+        if (storageError) {
+          console.warn('Failed to delete file from storage:', storageError)
+        }
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', documentId)
+
+      if (dbError) {
+        throw new Error(dbError.message)
+      }
+
+      // Refresh documents list
+      await fetchDocuments()
+      alert('Document deleted successfully!')
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert(`Error deleting document: ${error.message}`)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -251,6 +287,12 @@ const HRDashboard = () => {
                       Review
                     </button>
                   )}
+                  <button
+                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    Delete
+                  </button>
                 </td>
               </tr>
             ))}
