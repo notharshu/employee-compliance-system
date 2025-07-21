@@ -6,11 +6,15 @@ const EmployeeDashboard = () => {
   const { user } = useAuth()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [uploadModal, setUploadModal] = useState(false)
   const [newDocument, setNewDocument] = useState({
     title: '',
     description: '',
     category: '',
+    expirationDate: '',
+    expirationDateValue: '',
+    department: '',
     file: null
   })
 
@@ -37,10 +41,10 @@ const EmployeeDashboard = () => {
 
   const handleFileUpload = async (e) => {
     e.preventDefault()
-    if (!newDocument.file || !newDocument.title || !newDocument.category) return
+    if (!newDocument.file || !newDocument.title || !newDocument.category || !newDocument.department) return
 
     try {
-      setLoading(true)
+      setUploading(true)
       
       // Upload file to Supabase Storage
       const fileExt = newDocument.file.name.split('.').pop()
@@ -53,29 +57,47 @@ const EmployeeDashboard = () => {
       if (uploadError) throw uploadError
 
       // Create document record
+      const documentData = {
+        employee_id: user.id,
+        title: newDocument.title,
+        description: newDocument.description,
+        category: newDocument.category,
+        department: newDocument.department,
+        file_url: uploadData.path,
+        file_name: newDocument.file.name,
+        file_size: newDocument.file.size,
+        mime_type: newDocument.file.type
+      }
+
+      // Add expiration date if provided
+      if (newDocument.expirationDate === 'date' && newDocument.expirationDateValue) {
+        documentData.expiration_date = newDocument.expirationDateValue
+      } else if (newDocument.expirationDate === 'NA') {
+        documentData.expiration_date = null
+      }
+
       const { data, error } = await supabase
         .from('documents')
-        .insert({
-          employee_id: user.id,
-          title: newDocument.title,
-          description: newDocument.description,
-          category: newDocument.category,
-          file_url: uploadData.path,
-          file_name: newDocument.file.name,
-          file_size: newDocument.file.size,
-          mime_type: newDocument.file.type
-        })
+        .insert(documentData)
 
       if (error) throw error
 
       setUploadModal(false)
-      setNewDocument({ title: '', description: '', category: '', file: null })
+      setNewDocument({ 
+        title: '', 
+        description: '', 
+        category: '', 
+        expirationDate: '', 
+        expirationDateValue: '', 
+        department: '', 
+        file: null 
+      })
       fetchDocuments()
     } catch (error) {
       console.error('Error uploading document:', error)
       alert('Error uploading document. Please try again.')
     } finally {
-      setLoading(false)
+      setUploading(false)
     }
   }
 
@@ -185,7 +207,7 @@ const EmployeeDashboard = () => {
             <h3 className="text-lg font-bold text-gray-900 mb-4">Upload Document</h3>
             <form onSubmit={handleFileUpload}>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Title</label>
+                <label className="block text-sm font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -195,7 +217,7 @@ const EmployeeDashboard = () => {
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Category</label>
+                <label className="block text-sm font-medium text-gray-700">Category <span className="text-red-500">*</span></label>
                 <select
                   required
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
@@ -209,6 +231,41 @@ const EmployeeDashboard = () => {
                 </select>
               </div>
               <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Department <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  value={newDocument.department}
+                  onChange={(e) => setNewDocument({...newDocument, department: e.target.value})}
+                  placeholder="e.g. IT, HR, Finance"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700">Expiration Date</label>
+                <select
+                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                  value={newDocument.expirationDate}
+                  onChange={(e) => setNewDocument({...newDocument, expirationDate: e.target.value, expirationDateValue: e.target.value === 'NA' ? 'NA' : ''})}
+                >
+                  <option value="">Select Expiration Type</option>
+                  <option value="NA">NA (No Expiration)</option>
+                  <option value="date">Set Expiration Date</option>
+                </select>
+              </div>
+              {newDocument.expirationDate === 'date' && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700">Select Date <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    required
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={newDocument.expirationDateValue}
+                    onChange={(e) => setNewDocument({...newDocument, expirationDateValue: e.target.value})}
+                  />
+                </div>
+              )}
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
@@ -218,7 +275,7 @@ const EmployeeDashboard = () => {
                 />
               </div>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">File</label>
+                <label className="block text-sm font-medium text-gray-700">File <span className="text-red-500">*</span></label>
                 <input
                   type="file"
                   required
@@ -236,9 +293,10 @@ const EmployeeDashboard = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                  disabled={uploading}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
                 >
-                  Upload
+                  {uploading ? 'Uploading...' : 'Upload'}
                 </button>
               </div>
             </form>

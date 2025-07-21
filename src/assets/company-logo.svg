@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="none">
+  <!-- Background Circle -->
+  <circle cx="40" cy="40" r="35" fill="#2563eb" />
+  
+  <!-- Document Icon -->
+  <path d="M25 25h20v5H25z" fill="white" />
+  <path d="M25 32h20v3H25z" fill="white" />
+  <path d="M25 38h15v3H25z" fill="white" />
+  <path d="M25 44h18v3H25z" fill="white" />
+  <path d="M25 50h12v3H25z" fill="white" />
+  
+  <!-- Checkmark -->
+  <path d="M45 35l3 3 7-7" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+  
+  <!-- Company Text -->
+  <text x="90" y="30" fill="#1f2937" fontSize="18" fontWeight="bold" fontFamily="Arial, sans-serif">
+    Employee
+  </text>
+  <text x="90" y="50" fill="#1f2937" fontSize="18" fontWeight="bold" fontFamily="Arial, sans-serif">
+    Compliance
+  </text>
+</svg>

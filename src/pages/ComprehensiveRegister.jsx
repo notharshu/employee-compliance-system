@@ -208,7 +208,7 @@ const ComprehensiveRegister = () => {
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-900">Account Information</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email Address *</label>
+              <label className="block text-sm font-medium text-gray-700">Email Address <span className="text-red-500">*</span></label>
               <input
                 type="email"
                 required
@@ -218,7 +218,7 @@ const ComprehensiveRegister = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Password *</label>
+              <label className="block text-sm font-medium text-gray-700">Password <span className="text-red-500">*</span></label>
               <input
                 type="password"
                 required
@@ -228,7 +228,7 @@ const ComprehensiveRegister = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
+              <label className="block text-sm font-medium text-gray-700">Confirm Password <span className="text-red-500">*</span></label>
               <input
                 type="password"
                 required
@@ -246,7 +246,7 @@ const ComprehensiveRegister = () => {
             <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">First Name *</label>
+                <label className="block text-sm font-medium text-gray-700">First Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -265,7 +265,7 @@ const ComprehensiveRegister = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Last Name *</label>
+                <label className="block text-sm font-medium text-gray-700">Last Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -277,7 +277,7 @@ const ComprehensiveRegister = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Date of Birth *</label>
+                <label className="block text-sm font-medium text-gray-700">Date of Birth <span className="text-red-500">*</span></label>
                 <input
                   type="date"
                   required
@@ -287,7 +287,7 @@ const ComprehensiveRegister = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Gender *</label>
+                <label className="block text-sm font-medium text-gray-700">Gender <span className="text-red-500">*</span></label>
                 <select
                   required
                   className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
