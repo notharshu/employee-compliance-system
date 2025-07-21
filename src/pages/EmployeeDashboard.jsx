@@ -86,7 +86,7 @@ const EmployeeDashboard = () => {
 
       // Add expiration date if provided
       if (newDocument.expirationDate === 'date' && newDocument.expirationDateValue) {
-        documentData.expiration_date = newDocument.expirationDateValue
+        documentData.expiry_date = newDocument.expirationDateValue
       }
 
       console.log('Document data to insert:', documentData)
