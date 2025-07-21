@@ -41,47 +41,107 @@ const EmployeeDashboard = () => {
 
   const handleFileUpload = async (e) => {
     e.preventDefault()
-    if (!newDocument.file || !newDocument.title || !newDocument.category || !newDocument.department) return
+    
+    // Validate required fields
+    if (!newDocument.file) {
+      alert('Please select a file to upload.')
+      return
+    }
+    if (!newDocument.title) {
+      alert('Please enter a document title.')
+      return
+    }
+    if (!newDocument.category) {
+      alert('Please select a document category.')
+      return
+    }
+    if (!newDocument.department) {
+      alert('Please enter the department.')
+      return
+    }
+    
+    // Validate expiration date if "Set Expiration Date" is selected
+    if (newDocument.expirationDate === 'date' && !newDocument.expirationDateValue) {
+      alert('Please select an expiration date.')
+      return
+    }
 
     try {
       setUploading(true)
+      console.log('Starting document upload...')
       
-      // Upload file to Supabase Storage
-      const fileExt = newDocument.file.name.split('.').pop()
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, newDocument.file)
-
-      if (uploadError) throw uploadError
-
-      // Create document record
+      // First, try to create the document record without file upload
+      // This helps us identify if the issue is with storage or database
       const documentData = {
         employee_id: user.id,
         title: newDocument.title,
-        description: newDocument.description,
+        description: newDocument.description || '',
         category: newDocument.category,
         department: newDocument.department,
-        file_url: uploadData.path,
         file_name: newDocument.file.name,
         file_size: newDocument.file.size,
-        mime_type: newDocument.file.type
+        mime_type: newDocument.file.type,
+        status: 'pending'
       }
 
       // Add expiration date if provided
       if (newDocument.expirationDate === 'date' && newDocument.expirationDateValue) {
         documentData.expiration_date = newDocument.expirationDateValue
-      } else if (newDocument.expirationDate === 'NA') {
-        documentData.expiration_date = null
       }
 
-      const { data, error } = await supabase
+      console.log('Document data to insert:', documentData)
+      
+      // Try to upload file to storage first
+      const fileExt = newDocument.file.name.split('.').pop()
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`
+      
+      console.log('Uploading file to storage:', fileName)
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, newDocument.file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError)
+        
+        // If bucket doesn't exist, try to create it
+        if (uploadError.message?.includes('Bucket not found')) {
+          alert('Storage bucket not found. Please contact your administrator to set up the document storage.')
+          return
+        }
+        
+        throw new Error(`File upload failed: ${uploadError.message}`)
+      }
+
+      console.log('File uploaded successfully:', uploadData)
+      
+      // Add file URL to document data
+      documentData.file_url = uploadData.path
+
+      // Insert document record
+      const { data: insertData, error: insertError } = await supabase
         .from('documents')
         .insert(documentData)
+        .select()
 
-      if (error) throw error
+      if (insertError) {
+        console.error('Database insert error:', insertError)
+        
+        // Clean up uploaded file if database insert fails
+        await supabase.storage
+          .from('documents')
+          .remove([uploadData.path])
+          
+        throw new Error(`Database error: ${insertError.message}`)
+      }
 
+      console.log('Document inserted successfully:', insertData)
+      
+      // Success!
+      alert('Document uploaded successfully!')
       setUploadModal(false)
       setNewDocument({ 
         title: '', 
@@ -92,10 +152,13 @@ const EmployeeDashboard = () => {
         department: '', 
         file: null 
       })
-      fetchDocuments()
+      
+      // Refresh documents list
+      await fetchDocuments()
+      
     } catch (error) {
       console.error('Error uploading document:', error)
-      alert('Error uploading document. Please try again.')
+      alert(`Error uploading document: ${error.message}`)
     } finally {
       setUploading(false)
     }
