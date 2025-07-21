@@ -11,11 +11,9 @@ const Profile = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [uploadingPicture, setUploadingPicture] = useState(false)
   const fileInputRef = useRef(null)
-  
-  // Profile data
+
   const [profile, setProfile] = useState({})
-  
-  // Form data
+
   const [formData, setFormData] = useState({
     first_name: '',
     middle_name: '',
@@ -31,14 +29,12 @@ const Profile = () => {
     ifsc_code: '',
     profile_picture_url: ''
   })
-  
-  // Password change
+
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   })
-
   const [showPasswordChange, setShowPasswordChange] = useState(false)
 
   useEffect(() => {
@@ -56,7 +52,7 @@ const Profile = () => {
         .single()
 
       if (error) throw error
-      
+
       setProfile(data)
       setFormData({
         first_name: data.first_name || '',
@@ -98,13 +94,28 @@ const Profile = () => {
     const file = e.target.files[0]
     if (!file) return
 
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please select a valid image file (JPEG, PNG, or WebP)')
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB')
+      return
+    }
+
     try {
       setUploadingPicture(true)
       setError('')
 
-      // Upload file to Supabase Storage
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+      if (userError || !currentUser) {
+        throw new Error('User not authenticated')
+      }
+
       const fileExt = file.name.split('.').pop()
-      const fileName = `profiles/${user.id}.${fileExt}`
+      const fileName = `${currentUser.id}/profile-picture.${fileExt}`
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('profile-pictures')
@@ -113,26 +124,29 @@ const Profile = () => {
           upsert: true
         })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error:', uploadError)
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
 
-      // Get public URL
       const { data: urlData } = supabase.storage
         .from('profile-pictures')
         .getPublicUrl(fileName)
 
-      // Update profile with new picture URL
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ profile_picture_url: urlData.publicUrl })
-        .eq('id', user.id)
+        .eq('id', currentUser.id)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        await supabase.storage.from('profile-pictures').remove([fileName])
+        throw new Error(`Profile update failed: ${updateError.message}`)
+      }
 
       setFormData({
         ...formData,
         profile_picture_url: urlData.publicUrl
       })
-      
       setProfile({
         ...profile,
         profile_picture_url: urlData.publicUrl
@@ -140,8 +154,11 @@ const Profile = () => {
 
       setSuccess('Profile picture updated successfully!')
       setTimeout(() => setSuccess(''), 3000)
+
     } catch (error) {
+      console.error('Profile picture upload error:', error)
       setError('Error uploading profile picture: ' + error.message)
+      setTimeout(() => setError(''), 5000)
     } finally {
       setUploadingPicture(false)
     }
@@ -161,21 +178,20 @@ const Profile = () => {
 
       if (error) throw error
 
-      // Update local profile state
       setProfile({...profile, ...formData})
-      
       setSuccess('Profile updated successfully!')
       setIsEditing(false)
       setTimeout(() => setSuccess(''), 3000)
+
     } catch (error) {
       setError('Error updating profile: ' + error.message)
+      setTimeout(() => setError(''), 5000)
     } finally {
       setSaving(false)
     }
   }
 
   const handleCancelEdit = () => {
-    // Reset form data to original profile values
     setFormData({
       first_name: profile.first_name || '',
       middle_name: profile.middle_name || '',
@@ -222,33 +238,42 @@ const Profile = () => {
       if (error) throw error
 
       setSuccess('Password updated successfully!')
-      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      })
       setShowPasswordChange(false)
       setTimeout(() => setSuccess(''), 3000)
+
     } catch (error) {
       setError('Error updating password: ' + error.message)
+      setTimeout(() => setError(''), 5000)
     } finally {
       setSaving(false)
     }
   }
 
+  const getInitials = () => {
+    const firstName = profile.first_name || ''
+    const lastName = profile.last_name || ''
+    return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || user.email.charAt(0).toUpperCase()
+  }
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
       </div>
     )
   }
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="bg-white shadow rounded-lg">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex justify-between items-start mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {isEditing ? 'Edit Profile' : 'Profile Overview'}
-            </h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile</h1>
             <p className="text-gray-600">
               {isEditing ? 'Update your personal information and account settings' : 'View your personal information and account settings'}
             </p>
@@ -256,357 +281,421 @@ const Profile = () => {
           {!isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 flex items-center space-x-2"
             >
-              <svg className="-ml-1 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Edit Profile
+              <span>Edit Profile</span>
             </button>
           )}
         </div>
 
-        {/* Profile Picture Section */}
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-          <div className="flex items-center space-x-6">
-            <div className="relative">
-              {formData.profile_picture_url ? (
-                <img
-                  className="h-20 w-20 rounded-full object-cover border-4 border-white shadow-md"
-                  src={formData.profile_picture_url}
-                  alt="Profile"
-                />
-              ) : (
-                <div className="h-20 w-20 bg-primary-600 rounded-full flex items-center justify-center border-4 border-white shadow-md">
-                  <span className="text-2xl font-bold text-white">
-                    {profile.first_name?.[0]}{profile.last_name?.[0]}
-                  </span>
-                </div>
-              )}
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 bg-primary-600 text-white rounded-full p-1 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  disabled={uploadingPicture}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                </button>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleProfilePictureUpload}
-                className="hidden"
+        <div className="flex items-center space-x-6">
+          <div className="relative">
+            {formData.profile_picture_url ? (
+              <img
+                src={formData.profile_picture_url}
+                alt="Profile"
+                className="h-24 w-24 rounded-full object-cover border-4 border-gray-200"
               />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {profile.first_name} {profile.last_name}
-              </h2>
-              <p className="text-gray-600">{user.email}</p>
-              <p className="text-sm text-gray-500">
-                Employee ID: {profile.employee_id} | {profile.designation?.replace('_', ' ').toUpperCase()}
-              </p>
-              {isEditing && uploadingPicture && (
-                <p className="text-sm text-blue-600 mt-1">Uploading profile picture...</p>
-              )}
+            ) : (
+              <div className="h-24 w-24 bg-primary-100 rounded-full flex items-center justify-center border-4 border-gray-200">
+                <span className="text-2xl font-semibold text-primary-700">
+                  {getInitials()}
+                </span>
+              </div>
+            )}
+            {isEditing && (
+              <div className="absolute -bottom-2 -right-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPicture}
+                  className="bg-primary-600 hover:bg-primary-700 text-white p-2 rounded-full shadow-lg transition-colors duration-200 disabled:opacity-50"
+                >
+                  {uploadingPicture ? (
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleProfilePictureUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {profile.first_name && profile.last_name 
+                ? `${profile.first_name} ${profile.last_name}`
+                : 'Complete Your Profile'
+              }
+            </h2>
+            <p className="text-gray-600">{user.email}</p>
+            <div className="mt-2 flex space-x-4 text-sm text-gray-500">
+              <span>Employee ID: {profile.employee_id || 'Not assigned'}</span>
+              <span>•</span>
+              <span className="capitalize">
+                {profile.designation?.replace('_', ' ') || 'Employee'}
+              </span>
             </div>
           </div>
         </div>
 
+        {uploadingPicture && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin h-5 w-5 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+              <span className="text-blue-700">Uploading profile picture...</span>
+            </div>
+          </div>
+        )}
+
         {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
-            {error}
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="mx-6 mt-4 bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-md text-sm">
-            {success}
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-700">{success}</p>
           </div>
         )}
+      </div>
 
-        {/* Profile Content */}
-        {isEditing ? (
-          /* Edit Mode */
-          <form onSubmit={handleSaveProfile} className="p-6 space-y-6">
+      {isEditing ? (
+        <form onSubmit={handleSaveProfile} className="bg-white rounded-lg shadow-md p-6 space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">First Name <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="first_name"
-                  required
                   value={formData.first_name}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Middle Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Middle Name</label>
                 <input
                   type="text"
                   name="middle_name"
                   value={formData.middle_name}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Last Name <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="last_name"
-                  required
                   value={formData.last_name}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
+          </div>
 
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Phone Number <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                 <input
                   type="tel"
                   name="phone_number"
-                  required
                   value={formData.phone_number}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Name</label>
                 <input
                   type="text"
                   name="emergency_contact_name"
                   value={formData.emergency_contact_name}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Emergency Contact Phone</label>
+                <input
+                  type="tel"
+                  name="emergency_contact_phone"
+                  value={formData.emergency_contact_phone}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
-              <input
-                type="tel"
-                name="emergency_contact_phone"
-                value={formData.emergency_contact_phone}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              />
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Permanent Address</label>
+                <textarea
+                  name="permanent_address"
+                  value={formData.permanent_address}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Current Address</label>
+                <textarea
+                  name="current_address"
+                  value={formData.current_address}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Permanent Address</label>
-              <textarea
-                name="permanent_address"
-                rows={3}
-                value={formData.permanent_address}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Current Address</label>
-              <textarea
-                name="current_address"
-                rows={3}
-                value={formData.current_address}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Work Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Work Location</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Work Location</label>
                 <input
                   type="text"
                   name="work_location"
                   value={formData.work_location}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Shift Timing</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Shift Timing</label>
                 <input
                   type="text"
                   name="shift_timing"
                   value={formData.shift_timing}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
+          </div>
 
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Bank Information</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Bank Account Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bank Account Number</label>
                 <input
                   type="text"
                   name="bank_account_number"
                   value={formData.bank_account_number}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">IFSC Code</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">IFSC Code</label>
                 <input
                   type="text"
                   name="ifsc_code"
                   value={formData.ifsc_code}
                   onChange={handleInputChange}
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-between">
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 flex items-center space-x-2"
+            >
+              {saving && <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>}
+              <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+            </button>
+          </div>
+
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Change Password</h3>
               <button
                 type="button"
                 onClick={() => setShowPasswordChange(!showPasswordChange)}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="text-primary-600 hover:text-primary-700 font-medium"
               >
-                {showPasswordChange ? 'Cancel Password Change' : 'Change Password'}
+                {showPasswordChange ? 'Cancel' : 'Change Password'}
               </button>
-              
-              <div className="flex space-x-3">
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
             </div>
 
-            {/* Password Change Form */}
             {showPasswordChange && (
-              <div className="border-t border-gray-200 pt-6 mt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                <div className="space-y-4">
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">New Password <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                    <input
+                      type="password"
+                      name="currentPassword"
+                      value={passwordData.currentPassword}
+                      onChange={handlePasswordChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
                     <input
                       type="password"
                       name="newPassword"
                       value={passwordData.newPassword}
                       onChange={handlePasswordChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                       required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Confirm New Password <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
                     <input
                       type="password"
                       name="confirmPassword"
                       value={passwordData.confirmPassword}
                       onChange={handlePasswordChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                       required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
+                </div>
+                <div className="flex justify-end">
                   <button
-                    type="button"
-                    onClick={handleUpdatePassword}
+                    type="submit"
                     disabled={saving}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                    className="px-6 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 flex items-center space-x-2"
                   >
-                    {saving ? 'Updating Password...' : 'Update Password'}
+                    {saving && <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>}
+                    <span>{saving ? 'Updating...' : 'Update Password'}</span>
                   </button>
                 </div>
-              </div>
+              </form>
             )}
-          </form>
-        ) : (
-          /* Preview Mode */
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          </div>
+        </form>
+      ) : (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Personal Information</h3>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">First Name</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.first_name || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">First Name</label>
+                <p className="text-gray-900 font-medium">{profile.first_name || 'Not provided'}</p>
               </div>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Middle Name</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.middle_name || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Middle Name</label>
+                <p className="text-gray-900 font-medium">{profile.middle_name || 'Not provided'}</p>
               </div>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Last Name</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.last_name || 'Not provided'}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Phone Number</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.phone_number || 'Not provided'}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Emergency Contact Name</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.emergency_contact_name || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Last Name</label>
+                <p className="text-gray-900 font-medium">{profile.last_name || 'Not provided'}</p>
               </div>
             </div>
 
-            <div>
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Emergency Contact Phone</h3>
-              <p className="mt-1 text-sm text-gray-900">{profile.emergency_contact_phone || 'Not provided'}</p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Permanent Address</h3>
-              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{profile.permanent_address || 'Not provided'}</p>
-            </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Current Address</h3>
-              <p className="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{profile.current_address || 'Not provided'}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Contact Information</h3>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Work Location</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.work_location || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Phone Number</label>
+                <p className="text-gray-900 font-medium">{profile.phone_number || 'Not provided'}</p>
               </div>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Shift Timing</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.shift_timing || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Emergency Contact Name</label>
+                <p className="text-gray-900 font-medium">{profile.emergency_contact_name || 'Not provided'}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-500">Emergency Contact Phone</label>
+                <p className="text-gray-900 font-medium">{profile.emergency_contact_phone || 'Not provided'}</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Work Information</h3>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Bank Account Number</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.bank_account_number || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Work Location</label>
+                <p className="text-gray-900 font-medium">{profile.work_location || 'Not provided'}</p>
               </div>
+              
               <div>
-                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide">IFSC Code</h3>
-                <p className="mt-1 text-sm text-gray-900">{profile.ifsc_code || 'Not provided'}</p>
+                <label className="text-sm text-gray-500">Shift Timing</label>
+                <p className="text-gray-900 font-medium">{profile.shift_timing || 'Not provided'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 md:col-span-2">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Address Information</h3>
+              
+              <div>
+                <label className="text-sm text-gray-500">Permanent Address</label>
+                <p className="text-gray-900 font-medium">{profile.permanent_address || 'Not provided'}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-500">Current Address</label>
+                <p className="text-gray-900 font-medium">{profile.current_address || 'Not provided'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Bank Information</h3>
+              
+              <div>
+                <label className="text-sm text-gray-500">Bank Account Number</label>
+                <p className="text-gray-900 font-medium">{profile.bank_account_number || 'Not provided'}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm text-gray-500">IFSC Code</label>
+                <p className="text-gray-900 font-medium">{profile.ifsc_code || 'Not provided'}</p>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
