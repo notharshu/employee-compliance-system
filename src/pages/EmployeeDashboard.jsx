@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabase'
+import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle } from 'react-icons/fa'
 
 const EmployeeDashboard = () => {
   const { user } = useAuth()
@@ -279,22 +280,40 @@ const EmployeeDashboard = () => {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-700">Total Documents</h3>
-          <p className="text-3xl font-bold text-primary-600">{documents.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 justify-center">
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <div className="flex flex-col items-center">
+            <FaFileAlt className="text-3xl mb-3 text-primary-600" />
+            <h3 className="text-lg font-semibold text-gray-700">Total Documents</h3>
+            <p className="text-3xl font-bold text-primary-600">{documents.length}</p>
+          </div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-700">Pending Review</h3>
-          <p className="text-3xl font-bold text-yellow-600">
-            {documents.filter(d => d.status === 'pending').length}
-          </p>
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <div className="flex flex-col items-center">
+            <FaClock className="text-3xl mb-3 text-yellow-600" />
+            <h3 className="text-lg font-semibold text-gray-700">Pending Review</h3>
+            <p className="text-3xl font-bold text-yellow-600">
+              {documents.filter(d => d.status === 'pending').length}
+            </p>
+          </div>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h3 className="text-lg font-semibold text-gray-700">Approved</h3>
-          <p className="text-3xl font-bold text-green-600">
-            {documents.filter(d => d.status === 'approved').length}
-          </p>
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <div className="flex flex-col items-center">
+            <FaCheckCircle className="text-3xl mb-3 text-green-600" />
+            <h3 className="text-lg font-semibold text-gray-700">Approved</h3>
+            <p className="text-3xl font-bold text-green-600">
+              {documents.filter(d => d.status === 'approved').length}
+            </p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-lg shadow text-center">
+          <div className="flex flex-col items-center">
+            <FaTimesCircle className="text-3xl mb-3 text-red-600" />
+            <h3 className="text-lg font-semibold text-gray-700">Rejected</h3>
+            <p className="text-3xl font-bold text-red-600">
+              {documents.filter(d => d.status === 'rejected').length}
+            </p>
+          </div>
         </div>
       </div>
 
