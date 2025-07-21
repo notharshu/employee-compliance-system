@@ -9,6 +9,8 @@ import ResendConfirmation from './pages/ResendConfirmation'
 import Profile from './pages/Profile'
 import EmployeeDashboard from './pages/EmployeeDashboard'
 import HRDashboard from './pages/HRDashboard'
+import Employees from './pages/Employees'
+import EmployeeDocuments from './pages/EmployeeDocuments'
 
 function App() {
   return (
@@ -46,6 +48,24 @@ function App() {
                 <ProtectedRoute>
                   <Navigation />
                   <Profile />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/employees" 
+              element={
+                <ProtectedRoute requiredRole="hr">
+                  <Navigation />
+                  <Employees />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/employee/:id/documents" 
+              element={
+                <ProtectedRoute requiredRole="hr">
+                  <Navigation />
+                  <EmployeeDocuments />
                 </ProtectedRoute>
               } 
             />

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { FaFileDownload, FaTrashAlt, FaCheck, FaTimes } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
 import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabase'
@@ -163,9 +164,15 @@ const HRDashboard = () => {
         <h2 className="text-xl font-bold p-4">HR Dashboard</h2>
         <nav className="flex-1">
           <ul>
-            <li className="p-4 hover:bg-gray-700">Overview</li>
-            <li className="p-4 hover:bg-gray-700">Documents</li>
-            <li className="p-4 hover:bg-gray-700">Employees</li>
+            <li className="hover:bg-gray-700">
+              <Link to="/dashboard" className="block p-4 text-white no-underline">Overview</Link>
+            </li>
+            <li className="hover:bg-gray-700">
+              <Link to="/documents" className="block p-4 text-white no-underline">Documents</Link>
+            </li>
+            <li className="hover:bg-gray-700">
+              <Link to="/employees" className="block p-4 text-white no-underline">Employees</Link>
+            </li>
           </ul>
         </nav>
         <div className="p-4">
@@ -372,4 +379,5 @@ const HRDashboard = () => {
     </div>
   )
 }
+
 export default HRDashboard

@@ -53,12 +53,9 @@ const Logo = ({ size = 'md', showText = true, textColor = 'text-gray-900' }) => 
       
       {/* Text */}
       {showText && (
-        <div className="flex flex-col">
+        <div className="flex items-center">
           <span className={`font-manrope font-bold ${textSizeClasses[size]} ${textColor} leading-tight`}>
-            Compliance
-          </span>
-          <span className={`font-work-sans text-xs ${textColor} opacity-70 leading-tight -mt-1`}>
-            Management System
+            Employee Compliance
           </span>
         </div>
       )}
