@@ -17,7 +17,24 @@ SELECT COUNT(*) as document_count FROM documents;
 -- RECOMMENDED SOLUTION: Convert employee_id from TEXT to UUID
 -- This makes it compatible with auth.uid() and profiles.id
 
--- Step 1: First, ensure the employee_id column exists and handle any invalid data
+-- Step 1: Drop existing RLS policies that depend on employee_id
+DO $$
+DECLARE
+    policy_record RECORD;
+BEGIN
+    -- Drop all policies on documents table that might reference employee_id
+    FOR policy_record IN 
+        SELECT policyname FROM pg_policies 
+        WHERE schemaname = 'public' AND tablename = 'documents'
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON documents', policy_record.policyname);
+        RAISE NOTICE 'Dropped policy: %', policy_record.policyname;
+    END LOOP;
+    
+    RAISE NOTICE 'All policies on documents table have been dropped';
+END $$;
+
+-- Step 2: Handle employee_id column data type conversion
 DO $$
 BEGIN
     -- Add the column if it doesn't exist (as TEXT first)
@@ -29,7 +46,7 @@ BEGIN
         RAISE NOTICE 'Added employee_id column as TEXT';
     END IF;
 
-    -- Check current data type
+    -- Check current data type and convert if needed
     IF EXISTS (
         SELECT 1 FROM information_schema.columns 
         WHERE table_name = 'documents' 
@@ -118,6 +135,112 @@ EXCEPTION
         RAISE NOTICE 'Error adding foreign key constraints: %. This is expected if data types still don''t match.', SQLERRM;
 END $$;
 
+-- Step 4: Recreate the RLS policies with correct data types
+DO $$
+BEGIN
+    -- Recreate the insert policy
+    BEGIN
+        CREATE POLICY "Users can insert their documents" ON documents
+        FOR INSERT 
+        TO authenticated
+        WITH CHECK (employee_id = auth.uid());
+        RAISE NOTICE 'Created INSERT policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'INSERT policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating INSERT policy: %', SQLERRM;
+    END;
+    
+    -- Recreate the select policy
+    BEGIN
+        CREATE POLICY "Users can view their documents" ON documents
+        FOR SELECT 
+        TO authenticated
+        USING (employee_id = auth.uid());
+        RAISE NOTICE 'Created SELECT policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'SELECT policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating SELECT policy: %', SQLERRM;
+    END;
+    
+    -- Add update and delete policies as well
+    BEGIN
+        CREATE POLICY "Users can update their documents" ON documents
+        FOR UPDATE 
+        TO authenticated
+        USING (employee_id = auth.uid())
+        WITH CHECK (employee_id = auth.uid());
+        RAISE NOTICE 'Created UPDATE policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'UPDATE policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating UPDATE policy: %', SQLERRM;
+    END;
+    
+    BEGIN
+        CREATE POLICY "Users can delete their documents" ON documents
+        FOR DELETE 
+        TO authenticated
+        USING (employee_id = auth.uid());
+        RAISE NOTICE 'Created DELETE policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'DELETE policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating DELETE policy: %', SQLERRM;
+    END;
+    
+    -- HR policies
+    BEGIN
+        CREATE POLICY "HR can view all documents" ON documents
+        FOR SELECT 
+        TO authenticated
+        USING (
+            EXISTS (
+                SELECT 1 FROM profiles 
+                WHERE id = auth.uid() 
+                AND role = 'hr'
+            )
+        );
+        RAISE NOTICE 'Created HR SELECT policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'HR SELECT policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating HR SELECT policy: %', SQLERRM;
+    END;
+    
+    BEGIN
+        CREATE POLICY "HR can update all documents" ON documents
+        FOR UPDATE 
+        TO authenticated
+        USING (
+            EXISTS (
+                SELECT 1 FROM profiles 
+                WHERE id = auth.uid() 
+                AND role = 'hr'
+            )
+        )
+        WITH CHECK (
+            EXISTS (
+                SELECT 1 FROM profiles 
+                WHERE id = auth.uid() 
+                AND role = 'hr'
+            )
+        );
+        RAISE NOTICE 'Created HR UPDATE policy for documents';
+    EXCEPTION
+        WHEN duplicate_object THEN
+            RAISE NOTICE 'HR UPDATE policy already exists';
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Error creating HR UPDATE policy: %', SQLERRM;
+    END;
+END $$;
+
 -- Verify the final data types
 SELECT 
     table_name, 
@@ -138,3 +261,15 @@ SELECT
 FROM information_schema.key_column_usage 
 WHERE table_name = 'documents' 
 AND constraint_name LIKE '%_fkey';
+
+-- Verify final policies
+SELECT 
+    schemaname,
+    tablename,
+    policyname,
+    permissive,
+    roles,
+    cmd
+FROM pg_policies 
+WHERE tablename = 'documents' 
+ORDER BY policyname;
