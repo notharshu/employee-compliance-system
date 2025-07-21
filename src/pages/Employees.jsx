@@ -130,10 +130,6 @@ const Employees = () => {
             <UsersIcon className="h-8 w-8 text-blue-600 mr-3" />
             <h1 className="text-3xl font-bold text-gray-900">Employees</h1>
           </div>
-          <button className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add New Employee
-          </button>
         </div>
         <p className="text-gray-600">Manage and view all employee information</p>
       </div>

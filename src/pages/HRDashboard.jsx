@@ -158,27 +158,9 @@ const HRDashboard = () => {
   }
 
   return (
-    <div className="h-screen flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-800 text-white h-full flex flex-col">
-        <h2 className="text-xl font-bold p-4">HR Dashboard</h2>
-        <nav className="flex-1">
-          <ul>
-            <li className="hover:bg-gray-700">
-              <Link to="/dashboard" className="block p-4 text-white no-underline">Overview</Link>
-            </li>
-            <li className="hover:bg-gray-700">
-              <Link to="/documents" className="block p-4 text-white no-underline">Documents</Link>
-            </li>
-          </ul>
-        </nav>
-        <div className="p-4">
-          <button className="w-full bg-yellow-500 py-2 px-4 rounded-lg text-gray-900 focus:outline-none">Toggle Theme</button>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-gray-100">
       {/* Main content */}
-      <main className="flex-1 bg-gray-100 p-6">
+      <main className="p-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">HR Dashboard</h1>
           <p className="text-gray-600 mt-2">Review and manage employee documents</p>
