@@ -1,34 +1,33 @@
 import React, { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { FaFileDownload, FaTrashAlt, FaCheck, FaTimes } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
-import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabase'
+import { supabase } from '../utils/supabase'
+import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaDownload, FaEye } from 'react-icons/fa'
 
 const HRDashboard = () => {
-  const { user } = useAuth()
+  const { user, userProfile } = useAuth()
   const [documents, setDocuments] = useState([])
-  const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-  const [reviewModal, setReviewModal] = useState(false)
+  const [filterStatus, setFilterStatus] = useState('all')
   const [selectedDocument, setSelectedDocument] = useState(null)
+  const [reviewModal, setReviewModal] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [updating, setUpdating] = useState(false)
 
   useEffect(() => {
-    fetchDocuments()
-    fetchEmployees()
+    fetchAllDocuments()
   }, [])
 
-  const fetchDocuments = async () => {
+  const fetchAllDocuments = async () => {
     try {
       const { data, error } = await supabase
         .from('documents')
         .select(`
           *,
-          profiles:employee_id (
+          profiles (
             first_name,
             last_name,
-            email
+            email,
+            designation
           )
         `)
         .order('created_at', { ascending: false })
@@ -37,75 +36,63 @@ const HRDashboard = () => {
       setDocuments(data || [])
     } catch (error) {
       console.error('Error fetching documents:', error)
-    }
-  }
-
-  const fetchEmployees = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'employee')
-
-      if (error) throw error
-      setEmployees(data || [])
-    } catch (error) {
-      console.error('Error fetching employees:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleReviewDocument = async (documentId, status) => {
+  const handleReviewDocument = async (action) => {
+    if (!selectedDocument) return
+
     try {
+      setUpdating(true)
+      
       const { error } = await supabase
         .from('documents')
         .update({
-          status: status,
+          status: action,
+          review_notes: reviewNotes || null,
           reviewed_at: new Date().toISOString(),
-          reviewed_by: user.id,
-          review_notes: reviewNotes
+          reviewed_by: user.id
         })
-        .eq('id', documentId)
+        .eq('id', selectedDocument.id)
 
       if (error) throw error
 
       setReviewModal(false)
       setSelectedDocument(null)
       setReviewNotes('')
-      fetchDocuments()
+      await fetchAllDocuments()
+      
+      alert(`Document ${action === 'approved' ? 'approved' : 'rejected'} successfully!`)
     } catch (error) {
       console.error('Error updating document:', error)
       alert('Error updating document status')
+    } finally {
+      setUpdating(false)
     }
   }
 
-  const filteredDocuments = documents.filter(doc => {
-    if (filter === 'all') return true
-    return doc.status === filter
-  })
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'approved': return 'text-green-600 bg-green-100'
-      case 'rejected': return 'text-red-600 bg-red-100'
-      default: return 'text-yellow-600 bg-yellow-100'
+  const downloadDocument = async (document) => {
+    if (!document.file_url) {
+      alert('File not available for download')
+      return
     }
-  }
 
-  const downloadDocument = async (doc) => {
     try {
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(doc.file_url)
+        .download(document.file_url)
 
       if (error) throw error
 
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
-      a.download = doc.file_name
+      a.download = document.file_name || 'document'
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Error downloading document:', error)
@@ -113,117 +100,119 @@ const HRDashboard = () => {
     }
   }
 
-  const handleDeleteDocument = async (documentId, filePath) => {
-    if (!window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
-      return
-    }
-
-    try {
-      // Delete from storage if file exists
-      if (filePath) {
-        const { error: storageError } = await supabase.storage
-          .from('documents')
-          .remove([filePath])
-        
-        if (storageError) {
-          console.warn('Failed to delete file from storage:', storageError)
-        }
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', documentId)
-
-      if (dbError) {
-        throw new Error(dbError.message)
-      }
-
-      // Refresh documents list
-      await fetchDocuments()
-      alert('Document deleted successfully!')
-    } catch (error) {
-      console.error('Error deleting document:', error)
-      alert(`Error deleting document: ${error.message}`)
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'approved':
+        return 'text-green-600 bg-green-100'
+      case 'rejected':
+        return 'text-red-600 bg-red-100'
+      default:
+        return 'text-yellow-600 bg-yellow-100'
     }
   }
 
+  const filteredDocuments = documents.filter(doc => {
+    if (filterStatus === 'all') return true
+    return doc.status === filterStatus
+  })
+
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Main content */}
-      <main className="p-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">HR Dashboard</h1>
-          <p className="text-gray-600 mt-2">Review and manage employee documents</p>
-        </div>
+    <div className="max-w-7xl mx-auto p-6">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">HR Dashboard</h1>
+        <p className="text-gray-600">Review and manage employee documents</p>
+      </div>
 
-        {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 justify-center">
-          <div className="bg-white p-6 rounded-lg shadow text-center">
-            <h3 className="text-lg font-semibold text-gray-700">Total Documents</h3>
-            <p className="text-3xl font-bold text-primary-600">{documents.length}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow text-center">
-            <h3 className="text-lg font-semibold text-gray-700">Pending Review</h3>
-            <p className="text-3xl font-bold text-yellow-600">
-              {documents.filter(d => d.status === 'pending').length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow text-center">
-            <h3 className="text-lg font-semibold text-gray-700">Approved</h3>
-            <p className="text-3xl font-bold text-green-600">
-              {documents.filter(d => d.status === 'approved').length}
-            </p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow text-center">
-            <h3 className="text-lg font-semibold text-gray-700">Rejected</h3>
-            <p className="text-3xl font-bold text-red-600">
-              {documents.filter(d => d.status === 'rejected').length}
-            </p>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-blue-100">
+              <FaFileAlt className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Total Documents</p>
+              <p className="text-2xl font-semibold text-gray-900">{documents.length}</p>
+            </div>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="mb-6">
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg ${filter === 'all' ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              All Documents
-            </button>
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-4 py-2 rounded-lg ${filter === 'pending' ? 'bg-yellow-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Pending Review
-            </button>
-            <button
-              onClick={() => setFilter('approved')}
-              className={`px-4 py-2 rounded-lg ${filter === 'approved' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Approved
-            </button>
-            <button
-              onClick={() => setFilter('rejected')}
-              className={`px-4 py-2 rounded-lg ${filter === 'rejected' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700'}`}
-            >
-              Rejected
-            </button>
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-yellow-100">
+              <FaClock className="h-6 w-6 text-yellow-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Pending Review</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {documents.filter(d => d.status === 'pending').length}
+              </p>
+            </div>
           </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-green-100">
+              <FaCheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Approved</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {documents.filter(d => d.status === 'approved').length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-red-100">
+              <FaTimesCircle className="h-6 w-6 text-red-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-500">Rejected</p>
+              <p className="text-2xl font-semibold text-gray-900">
+                {documents.filter(d => d.status === 'rejected').length}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex space-x-1 mb-6">
+          {[
+            { key: 'all', label: 'All Documents' },
+            { key: 'pending', label: 'Pending Review' },
+            { key: 'approved', label: 'Approved' },
+            { key: 'rejected', label: 'Rejected' }
+          ].map((filter) => (
+            <button
+              key={filter.key}
+              onClick={() => setFilterStatus(filter.key)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                filterStatus === filter.key
+                  ? 'bg-primary-100 text-primary-700'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
 
         {/* Documents Table */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -249,7 +238,7 @@ const HRDashboard = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredDocuments.map((doc) => (
-                <tr key={doc.id}>
+                <tr key={doc.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
@@ -258,48 +247,69 @@ const HRDashboard = () => {
                       <div className="text-sm text-gray-500">{doc.profiles?.email}</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4">
                     <div>
                       <div className="text-sm font-medium text-gray-900">{doc.title}</div>
                       <div className="text-sm text-gray-500">{doc.description}</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {doc.category}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm text-gray-900">{doc.category}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}
-                    >
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
                       {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(doc.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                    <button
-                      onClick={() => downloadDocument(doc)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <FaFileDownload size={16} />
-                    </button>
-                    {doc.status === 'pending' && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2">
                       <button
                         onClick={() => {
                           setSelectedDocument(doc)
                           setReviewModal(true)
                         }}
-                        className="text-green-600 hover:text-green-800"
+                        className="text-blue-600 hover:text-blue-900 p-1 rounded"
+                        title="Review"
                       >
-                        <FaCheck size={16} />
+                        <FaEye className="h-4 w-4" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <FaTrashAlt size={16} />
-                    </button>
+                      {doc.file_url && (
+                        <button
+                          onClick={() => downloadDocument(doc)}
+                          className="text-green-600 hover:text-green-900 p-1 rounded"
+                          title="Download"
+                        >
+                          <FaDownload className="h-4 w-4" />
+                        </button>
+                      )}
+                      {doc.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedDocument(doc)
+                              handleReviewDocument('approved')
+                            }}
+                            className="text-green-600 hover:text-green-900 p-1 rounded"
+                            title="Approve"
+                          >
+                            <FaCheckCircle className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedDocument(doc)
+                              setReviewModal(true)
+                            }}
+                            className="text-red-600 hover:text-red-900 p-1 rounded"
+                            title="Reject"
+                          >
+                            <FaTimesCircle className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -307,56 +317,107 @@ const HRDashboard = () => {
           </table>
 
           {filteredDocuments.length === 0 && (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
+              <FaFileAlt className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-500">No documents found for the selected filter.</p>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Review Modal */}
-        {reviewModal && selectedDocument && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Review Document</h3>
-              <div className="mb-4">
-                <p><strong>Title:</strong> {selectedDocument.title}</p>
-                <p><strong>Employee:</strong> {selectedDocument.profiles?.first_name} {selectedDocument.profiles?.last_name}</p>
-                <p><strong>Category:</strong> {selectedDocument.category}</p>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Review Notes</label>
-                <textarea
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  rows={4}
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                  placeholder="Add notes about your review decision..."
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
+      {/* Review Modal */}
+      {reviewModal && selectedDocument && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Review Document</h3>
                 <button
-                  onClick={() => setReviewModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  onClick={() => {
+                    setReviewModal(false)
+                    setSelectedDocument(null)
+                    setReviewNotes('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Title:</label>
+                  <p className="text-gray-900">{selectedDocument.title}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Employee:</label>
+                  <p className="text-gray-900">
+                    {selectedDocument.profiles?.first_name} {selectedDocument.profiles?.last_name}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Category:</label>
+                  <p className="text-gray-900">{selectedDocument.category}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description:</label>
+                  <p className="text-gray-900">{selectedDocument.description || 'No description provided'}</p>
+                </div>
+
+                <div>
+                  <label htmlFor="reviewNotes" className="block text-sm font-medium text-gray-700 mb-2">
+                    Review Notes:
+                  </label>
+                  <textarea
+                    id="reviewNotes"
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Add review notes (optional)..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 mt-6">
+                <button
+                  onClick={() => {
+                    setReviewModal(false)
+                    setSelectedDocument(null)
+                    setReviewNotes('')
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleReviewDocument(selectedDocument.id, 'rejected')}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                  onClick={() => handleReviewDocument('rejected')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 flex items-center space-x-2"
                 >
-                  Reject
+                  {updating && <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>}
+                  <FaTimesCircle className="h-4 w-4" />
+                  <span>Reject</span>
                 </button>
                 <button
-                  onClick={() => handleReviewDocument(selectedDocument.id, 'approved')}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  onClick={() => handleReviewDocument('approved')}
+                  disabled={updating}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 flex items-center space-x-2"
                 >
-                  Approve
+                  {updating && <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>}
+                  <FaCheckCircle className="h-4 w-4" />
+                  <span>Approve</span>
                 </button>
               </div>
             </div>
           </div>
-        )}
-      </main>
+        </div>
+      )}
     </div>
   )
 }
