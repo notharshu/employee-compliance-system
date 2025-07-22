@@ -49,7 +49,7 @@ const HRDashboard = () => {
           review_notes,
           reviewed_at,
           reviewed_by,
-          employee:profiles!employee_id (
+          profiles!documents_employee_id_fkey (
             id,
             first_name,
             last_name,
@@ -157,178 +157,191 @@ const HRDashboard = () => {
   }
 
   const handleDeleteDocument = async (doc) => {
-  const documentName = doc.title || doc.file_name || 'this document'
-  
-  if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
-    return
-  }
-
-  try {
-    setDeleting(true)
-
-    // Delete from database first
-    const { error: dbError } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', doc.id)
-
-    if (dbError) {
-      console.error('Error deleting document from database:', dbError)
-      throw new Error(`Database deletion failed: ${dbError.message}`)
-    }
-
-    console.log('Document deleted from database successfully')
-
-    // Try to delete file from storage
-    if (doc.file_url) {
-      let filePath = doc.file_url
-      
-      // Clean up the file path
-      if (filePath.includes('/storage/v1/object/public/documents/')) {
-        filePath = filePath.split('/documents/')[1]
-      } else if (filePath.includes('/documents/')) {
-        filePath = filePath.split('/documents/')[1]
-      } else if (filePath.startsWith('documents/')) {
-        filePath = filePath.substring(10) // Remove 'documents/' prefix
-      }
-
-      console.log('Attempting to delete file at path:', filePath)
-
-      const { error: storageError } = await supabase.storage
-        .from('documents')
-        .remove([filePath])
-      
-      if (storageError) {
-        console.warn('Storage deletion warning:', storageError)
-      } else {
-        console.log('File deleted from storage successfully')
-      }
-    }
-
-    // Close modal first if it's open
-    if (reviewModal && selectedDocument?.id === doc.id) {
-      setReviewModal(false)
-      setSelectedDocument(null)
-      setReviewNotes('')
-    }
-
-    // Force refresh the documents list
-    await fetchAllDocuments()
+    const documentName = doc.title || doc.file_name || 'this document'
     
-    alert('Document deleted successfully!')
+    if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
+      return
+    }
 
-  } catch (error) {
-    console.error('Error deleting document:', error)
-    alert('Error deleting document: ' + error.message)
-    
-    // Force refresh anyway to show current state
     try {
+      setDeleting(true)
+
+      console.log('Attempting to delete document with ID:', doc.id)
+      
+      const { data, error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', doc.id)
+        .select()
+
+      if (dbError) {
+        console.error('Database deletion error:', dbError)
+        throw new Error(`Database deletion failed: ${dbError.message}`)
+      }
+
+      console.log('Deleted from database:', data)
+
+      if (!data || data.length === 0) {
+        throw new Error('No document was deleted - document may not exist or you may not have permission')
+      }
+
+      if (doc.file_url) {
+        let filePath = doc.file_url
+        
+        if (filePath.includes('/storage/v1/object/public/documents/')) {
+          filePath = filePath.split('/documents/')[1]
+        } else if (filePath.includes('/documents/')) {
+          filePath = filePath.split('/documents/')[1]
+        } else if (filePath.startsWith('documents/')) {
+          filePath = filePath.substring(10)
+        }
+
+        console.log('Attempting to delete file at path:', filePath)
+
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([filePath])
+        
+        if (storageError) {
+          console.warn('Storage deletion warning (non-critical):', storageError)
+        } else {
+          console.log('File deleted from storage successfully')
+        }
+      }
+
+      if (reviewModal && selectedDocument?.id === doc.id) {
+        setReviewModal(false)
+        setSelectedDocument(null)
+        setReviewNotes('')
+      }
+
+      setDocuments(prevDocs => prevDocs.filter(d => d.id !== doc.id))
+      
+      setStats(prevStats => {
+        const newStats = { ...prevStats }
+        newStats.total = Math.max(0, newStats.total - 1)
+        
+        if (doc.status === 'pending') {
+          newStats.pending = Math.max(0, newStats.pending - 1)
+        } else if (doc.status === 'approved') {
+          newStats.approved = Math.max(0, newStats.approved - 1)
+        } else if (doc.status === 'rejected') {
+          newStats.rejected = Math.max(0, newStats.rejected - 1)
+        }
+        
+        return newStats
+      })
+
+      setTimeout(() => {
+        fetchAllDocuments()
+      }, 1000)
+
+      alert('Document deleted successfully!')
+
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert('Error deleting document: ' + error.message)
+      
       await fetchAllDocuments()
-    } catch (refreshError) {
-      console.error('Error refreshing documents list:', refreshError)
+    } finally {
+      setDeleting(false)
     }
-  } finally {
-    setDeleting(false)
   }
-}
 
   const downloadDocument = async (doc) => {
-  if (!doc.file_url) {
-    alert('File not available for download')
-    return
-  }
-
-  try {
-    let filePath = null
-    if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-      filePath = doc.file_url.split('/documents/')[1]
-    } else {
-      filePath = doc.file_url
-    }
-
-    console.log('Downloading file from path:', filePath)
-
-    const { data, error } = await supabase.storage
-      .from('documents')
-      .download(filePath)
-
-    if (error) {
-      console.error('Download error:', error)
-      alert('Error downloading document: ' + error.message)
+    if (!doc.file_url) {
+      alert('File not available for download')
       return
     }
 
-    if (!data) {
-      alert('No file data received')
-      return
-    }
+    try {
+      let filePath = null
+      if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+        filePath = doc.file_url.split('/documents/')[1]
+      } else {
+        filePath = doc.file_url
+      }
 
-    const url = URL.createObjectURL(data)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = doc.file_name || doc.title || 'document'
-    anchor.style.display = 'none'
-    document.body.appendChild(anchor)
-    anchor.click()
-    document.body.removeChild(anchor)
-    URL.revokeObjectURL(url)
+      console.log('Downloading file from path:', filePath)
 
-    console.log('File downloaded successfully')
-    
-  } catch (error) {
-    console.error('Error downloading document:', error)
-    alert('Error downloading document: ' + error.message)
-  }
-}
-
-  const viewDocument = async (doc) => {
-  if (!doc.file_url) {
-    alert('File not available for viewing')
-    return
-  }
-
-  try {
-    // Extract file path
-    let filePath = null
-    if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-      filePath = doc.file_url.split('/documents/')[1]
-    } else {
-      filePath = doc.file_url
-    }
-
-    // For HR users, create a signed URL for private bucket access
-    if (userProfile?.role === 'hr') {
       const { data, error } = await supabase.storage
         .from('documents')
-        .createSignedUrl(filePath, 3600) // 1 hour expiry
+        .download(filePath)
 
       if (error) {
-        console.error('Error creating signed URL:', error)
-        throw error
-      }
-
-      if (data.signedUrl) {
-        window.open(data.signedUrl, '_blank')
+        console.error('Download error:', error)
+        alert('Error downloading document: ' + error.message)
         return
       }
-    }
 
-    // Fallback to public URL
-    const { data } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath)
+      if (!data) {
+        alert('No file data received')
+        return
+      }
 
-    if (data.publicUrl) {
-      window.open(data.publicUrl, '_blank')
-    } else {
-      alert('Unable to generate viewing URL for this document')
+      const url = URL.createObjectURL(data)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = doc.file_name || doc.title || 'document'
+      anchor.style.display = 'none'
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+
+      console.log('File downloaded successfully')
+      
+    } catch (error) {
+      console.error('Error downloading document:', error)
+      alert('Error downloading document: ' + error.message)
     }
-    
-  } catch (error) {
-    console.error('Error viewing document:', error)
-    alert('Error opening document: ' + error.message)
   }
-}
+
+  const viewDocument = async (doc) => {
+    if (!doc.file_url) {
+      alert('File not available for viewing')
+      return
+    }
+
+    try {
+      let filePath = null
+      if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+        filePath = doc.file_url.split('/documents/')[1]
+      } else {
+        filePath = doc.file_url
+      }
+
+      if (userProfile?.role === 'hr') {
+        const { data, error } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(filePath, 3600)
+
+        if (error) {
+          console.error('Error creating signed URL:', error)
+          throw error
+        }
+
+        if (data.signedUrl) {
+          window.open(data.signedUrl, '_blank')
+          return
+        }
+      }
+
+      const { data } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath)
+
+      if (data.publicUrl) {
+        window.open(data.publicUrl, '_blank')
+      } else {
+        alert('Unable to generate viewing URL for this document')
+      }
+      
+    } catch (error) {
+      console.error('Error viewing document:', error)
+      alert('Error opening document: ' + error.message)
+    }
+  }
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -476,16 +489,16 @@ const HRDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.employee?.first_name && doc.employee?.last_name 
-                          ? `${doc.employee.first_name} ${doc.employee.last_name}`
+                        {doc.profiles?.first_name && doc.profiles?.last_name 
+                          ? `${doc.profiles.first_name} ${doc.profiles.last_name}`
                           : 'Unknown User'
                         }
                       </div>
                       <div className="text-sm text-gray-500">
-                        {doc.employee?.email || 'No email available'}
+                        {doc.profiles?.email || 'No email available'}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {doc.employee?.designation || 'Employee'}
+                        {doc.profiles?.designation || 'Employee'}
                       </div>
                     </div>
                   </td>
@@ -618,10 +631,10 @@ const HRDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee:</label>
                   <p className="text-gray-900">
-                    {selectedDocument.employee?.first_name && selectedDocument.employee?.last_name
-                      ? `${selectedDocument.employee.first_name} ${selectedDocument.employee.last_name}`
+                    {selectedDocument.profiles?.first_name && selectedDocument.profiles?.last_name
+                      ? `${selectedDocument.profiles.first_name} ${selectedDocument.profiles.last_name}`
                       : 'Unknown User'
-                    } ({selectedDocument.employee?.email || 'No email'})
+                    } ({selectedDocument.profiles?.email || 'No email'})
                   </p>
                 </div>
 
