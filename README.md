@@ -9,7 +9,7 @@
 
 **A modern, secure, and user-friendly platform for managing employee documents and compliance** 🚀
 
-[Live Demo](your-demo-link) • [Documentation](your-docs-link) • [Report Bug](your-issues-link)
+[Live Demo](https://employee-compliance-system.vercel.app/) 
 
 </div>
 
