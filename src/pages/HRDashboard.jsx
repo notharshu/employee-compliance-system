@@ -31,6 +31,7 @@ const HRDashboard = () => {
     try {
       setLoading(true)
       
+      // Using the correct relationship syntax based on your schema
       const { data, error } = await supabase
         .from('documents')
         .select(`
@@ -49,7 +50,7 @@ const HRDashboard = () => {
           review_notes,
           reviewed_at,
           reviewed_by,
-          employee:profiles!documents_employee_id_fkey (
+          profiles!documents_employee_id_fkey (
             id,
             first_name,
             last_name,
@@ -65,7 +66,7 @@ const HRDashboard = () => {
         throw error
       }
 
-      console.log('Fetched documents:', data)
+      console.log('Fetched documents with profiles:', data)
       
       setDocuments(data || [])
       
@@ -489,16 +490,16 @@ const HRDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.employee?.first_name && doc.employee?.last_name 
-                          ? `${doc.employee.first_name} ${doc.employee.last_name}`
+                        {doc.profiles?.first_name && doc.profiles?.last_name 
+                          ? `${doc.profiles.first_name} ${doc.profiles.last_name}`
                           : 'Unknown User'
                         }
                       </div>
                       <div className="text-sm text-gray-500">
-                        {doc.employee?.email || 'No email available'}
+                        {doc.profiles?.email || 'No email available'}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {doc.employee?.designation || 'Employee'}
+                        {doc.profiles?.designation || 'Employee'}
                       </div>
                     </div>
                   </td>
@@ -631,10 +632,10 @@ const HRDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee:</label>
                   <p className="text-gray-900">
-                    {selectedDocument.employee?.first_name && selectedDocument.employee?.last_name
-                      ? `${selectedDocument.employee.first_name} ${selectedDocument.employee.last_name}`
+                    {selectedDocument.profiles?.first_name && selectedDocument.profiles?.last_name
+                      ? `${selectedDocument.profiles.first_name} ${selectedDocument.profiles.last_name}`
                       : 'Unknown User'
-                    } ({selectedDocument.employee?.email || 'No email'})
+                    } ({selectedDocument.profiles?.email || 'No email'})
                   </p>
                 </div>
 
