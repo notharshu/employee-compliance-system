@@ -8,7 +8,8 @@ import {
   FaDownload, 
   FaFilter,
   FaTimes,
-  FaFileUpload
+  FaFileUpload,
+  FaTrash
 } from 'react-icons/fa'
 
 const CompanyPolicies = () => {
@@ -16,6 +17,7 @@ const CompanyPolicies = () => {
   const [policies, setPolicies] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState('all')
   
@@ -58,6 +60,7 @@ const CompanyPolicies = () => {
         .order('created_at', { ascending: false })
 
       if (error) throw error
+      console.log('Fetched policies:', data)
       setPolicies(data || [])
     } catch (error) {
       console.error('Error fetching policies:', error)
@@ -70,15 +73,26 @@ const CompanyPolicies = () => {
     const file = e.target.files[0]
     if (file) {
       // Validate file type
-      const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'image/png', 'image/jpeg']
+      const allowedTypes = [
+        'application/pdf', 
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'text/plain', 
+        'image/png', 
+        'image/jpeg',
+        'image/jpg'
+      ]
+      
       if (!allowedTypes.includes(file.type)) {
-        alert('Please select a valid file type (PDF, DOCX, TXT, PNG, JPG)')
+        alert('Please select a valid file type (PDF, DOCX, DOC, TXT, PNG, JPG)')
+        e.target.value = '' // Reset file input
         return
       }
       
       // Validate file size (10MB max)
       if (file.size > 10 * 1024 * 1024) {
         alert('File size must be less than 10MB')
+        e.target.value = '' // Reset file input
         return
       }
 
@@ -94,25 +108,35 @@ const CompanyPolicies = () => {
       return
     }
 
+    if (userProfile?.role !== 'hr') {
+      alert('Only HR users can upload policies')
+      return
+    }
+
     try {
       setUploading(true)
 
       // Upload file to Supabase Storage
       const fileExt = uploadForm.file.name.split('.').pop()
-      const fileName = `policies/${Date.now()}-${uploadForm.file.name}`
+      const fileName = `policies/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, uploadForm.file)
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError)
+        throw uploadError
+      }
+
+      console.log('File uploaded to:', fileName)
 
       // Save policy metadata to database
       const { error: dbError } = await supabase
         .from('company_policies')
         .insert({
-          title: uploadForm.title,
-          description: uploadForm.description,
+          title: uploadForm.title.trim(),
+          description: uploadForm.description.trim(),
           category: uploadForm.category,
           file_url: fileName,
           file_name: uploadForm.file.name,
@@ -121,11 +145,18 @@ const CompanyPolicies = () => {
           uploaded_by: user.id
         })
 
-      if (dbError) throw dbError
+      if (dbError) {
+        console.error('Database insert error:', dbError)
+        throw dbError
+      }
 
       // Reset form and close modal
       setUploadForm({ title: '', description: '', category: 'compliance', file: null })
       setShowUploadModal(false)
+      
+      // Clear file input
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) fileInput.value = ''
       
       // Refresh policies list
       await fetchPolicies()
@@ -139,64 +170,135 @@ const CompanyPolicies = () => {
     }
   }
 
+  // Updated viewPolicy function with timed access
   const viewPolicy = async (policy) => {
     try {
-      const { data } = supabase.storage
-        .from('documents')
-        .getPublicUrl(policy.file_url)
+      // Different access durations based on user role and policy category
+      let expirySeconds = 3600; // Default: 1 hour
+      
+      if (userProfile?.role === 'hr') {
+        expirySeconds = 7200; // HR gets 2 hours
+      } else if (policy.category === 'compliance' || policy.category === 'legal') {
+        expirySeconds = 1800; // Sensitive docs: 30 minutes for employees
+      }
 
-      if (data.publicUrl) {
-        window.open(data.publicUrl, '_blank')
+      console.log('Creating signed URL for:', policy.file_url)
+
+      // Create a signed URL with timed access
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(policy.file_url, expirySeconds)
+
+      if (error) {
+        console.error('Error creating signed URL:', error)
+        alert('Error accessing policy document: ' + error.message)
+        return
+      }
+
+      if (data.signedUrl) {
+        console.log('Signed URL created successfully')
+        
+        // Show access expiry info to user
+        const expiryTime = new Date(Date.now() + (expirySeconds * 1000)).toLocaleTimeString()
+        const accessDuration = userProfile?.role === 'hr' ? '2 hours' : 
+                              (policy.category === 'compliance' || policy.category === 'legal') ? '30 minutes' : '1 hour'
+        
+        // Optional: Show user when access expires
+        const shouldContinue = window.confirm(
+          `This document will be accessible for ${accessDuration} (until ${expiryTime}). Continue?`
+        )
+        
+        if (shouldContinue) {
+          window.open(data.signedUrl, '_blank')
+        }
+      } else {
+        alert('Unable to generate access URL for this document')
       }
     } catch (error) {
       console.error('Error viewing policy:', error)
+      alert('Error accessing policy: ' + error.message)
     }
   }
 
+  // Updated downloadPolicy function with timed access
   const downloadPolicy = async (policy) => {
     try {
+      console.log('Creating download URL for:', policy.file_url)
+
+      // Create signed URL for download with 10 minutes expiry
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(policy.file_url)
+        .createSignedUrl(policy.file_url, 600)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error creating download URL:', error)
+        alert('Error downloading policy: ' + error.message)
+        return
+      }
 
-      const url = URL.createObjectURL(data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = policy.file_name
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      if (data.signedUrl) {
+        console.log('Download URL created successfully')
+        
+        // Create temporary anchor for download
+        const a = document.createElement('a')
+        a.href = data.signedUrl
+        a.download = policy.file_name || policy.title
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        
+        // Optional: Show download expiry info
+        alert('Download started! Link expires in 10 minutes.')
+      } else {
+        alert('Unable to generate download URL')
+      }
     } catch (error) {
       console.error('Error downloading policy:', error)
       alert('Error downloading policy: ' + error.message)
     }
   }
 
-  const deletePolicy = async (policyId) => {
-    if (!window.confirm('Are you sure you want to delete this policy?')) return
+  const deletePolicy = async (policyId, policyTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${policyTitle}"? This action cannot be undone.`)) {
+      return
+    }
 
     try {
+      setDeleting(true)
+
       const { error } = await supabase
         .from('company_policies')
         .delete()
         .eq('id', policyId)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error deleting policy:', error)
+        throw error
+      }
 
       await fetchPolicies()
       alert('Policy deleted successfully!')
     } catch (error) {
       console.error('Error deleting policy:', error)
       alert('Error deleting policy: ' + error.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
   const filteredPolicies = policies.filter(policy => 
     categoryFilter === 'all' || policy.category === categoryFilter
   )
+
+  const closeModal = () => {
+    setShowUploadModal(false)
+    setUploadForm({ title: '', description: '', category: 'compliance', file: null })
+    
+    // Clear file input
+    const fileInput = document.querySelector('input[type="file"]')
+    if (fileInput) fileInput.value = ''
+  }
 
   if (loading) {
     return (
@@ -218,7 +320,7 @@ const CompanyPolicies = () => {
       </div>
 
       {/* Stats and Actions */}
-      <div className="bg-white/60 backdrop-blur rounded-xl shadow-lg p-6 mb-8">
+      <div className="bg-white/60 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex space-x-6">
             <div className="text-center">
@@ -230,6 +332,14 @@ const CompanyPolicies = () => {
                 {categories.length}
               </p>
               <p className="text-sm text-gray-600">Categories</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-gray-900">
+                {filteredPolicies.length}
+              </p>
+              <p className="text-sm text-gray-600">
+                {categoryFilter === 'all' ? 'All Policies' : 'Filtered'}
+              </p>
             </div>
           </div>
           
@@ -252,7 +362,7 @@ const CompanyPolicies = () => {
             {userProfile?.role === 'hr' && (
               <button
                 onClick={() => setShowUploadModal(true)}
-                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors duration-200"
               >
                 <FaUpload className="h-4 w-4" />
                 <span>Upload Policy</span>
@@ -265,7 +375,7 @@ const CompanyPolicies = () => {
       {/* Policies Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPolicies.map((policy) => (
-          <div key={policy.id} className="bg-white/60 backdrop-blur rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+          <div key={policy.id} className="bg-white/60 backdrop-blur-sm rounded-xl shadow-lg p-6 hover:shadow-xl transition-all duration-300 border border-white/20">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Manrope' }}>
@@ -275,41 +385,48 @@ const CompanyPolicies = () => {
                   {policy.category.charAt(0).toUpperCase() + policy.category.slice(1)}
                 </span>
               </div>
-              <FaFileAlt className="h-8 w-8 text-primary-500" />
+              <FaFileAlt className="h-8 w-8 text-primary-500 flex-shrink-0" />
             </div>
 
-            <p className="text-gray-600 text-sm mb-4" style={{ fontFamily: 'Work Sans' }}>
+            <p className="text-gray-600 text-sm mb-4 line-clamp-3" style={{ fontFamily: 'Work Sans' }}>
               {policy.description || 'No description available'}
             </p>
 
             <div className="text-xs text-gray-500 mb-4">
-              Uploaded {new Date(policy.created_at).toLocaleDateString()}
+              <div>Uploaded {new Date(policy.created_at).toLocaleDateString()}</div>
               {policy.uploader && (
-                <span> by {policy.uploader.first_name} {policy.uploader.last_name}</span>
+                <div>by {policy.uploader.first_name} {policy.uploader.last_name}</div>
               )}
+              <div className="mt-1">
+                Size: {policy.file_size ? (policy.file_size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown'}
+              </div>
             </div>
 
             <div className="flex space-x-2">
               <button
                 onClick={() => viewPolicy(policy)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center space-x-1"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center space-x-1 transition-colors duration-200"
+                title="View document (timed access)"
               >
                 <FaEye className="h-3 w-3" />
                 <span>View</span>
               </button>
               <button
                 onClick={() => downloadPolicy(policy)}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center space-x-1"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm flex items-center justify-center space-x-1 transition-colors duration-200"
+                title="Download document (10 min access)"
               >
                 <FaDownload className="h-3 w-3" />
                 <span>Download</span>
               </button>
               {userProfile?.role === 'hr' && (
                 <button
-                  onClick={() => deletePolicy(policy.id)}
-                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm"
+                  onClick={() => deletePolicy(policy.id, policy.title)}
+                  disabled={deleting}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm transition-colors duration-200 disabled:opacity-50"
+                  title="Delete policy"
                 >
-                  Delete
+                  <FaTrash className="h-3 w-3" />
                 </button>
               )}
             </div>
@@ -333,12 +450,12 @@ const CompanyPolicies = () => {
       {/* Upload Modal - HR Only */}
       {showUploadModal && userProfile?.role === 'hr' && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-1/2 shadow-lg rounded-md bg-white max-h-screen overflow-y-auto">
             <div className="mt-3">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Upload Company Policy</h3>
                 <button
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={closeModal}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <FaTimes className="w-6 h-6" />
@@ -395,32 +512,37 @@ const CompanyPolicies = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Policy Document *
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary-500 transition-colors duration-200">
                     <input
                       type="file"
                       required
                       onChange={handleFileChange}
-                      accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
-                      className="w-full"
+                      accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg"
+                      className="w-full cursor-pointer"
                     />
                     <p className="text-xs text-gray-500 mt-2">
-                      Accepted formats: PDF, DOCX, TXT, PNG, JPG (Max 10MB)
+                      Accepted formats: PDF, DOCX, DOC, TXT, PNG, JPG (Max 10MB)
                     </p>
+                    {uploadForm.file && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Selected: {uploadForm.file.name} ({(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB)
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setShowUploadModal(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    onClick={closeModal}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={uploading}
-                    className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 flex items-center space-x-2"
+                    className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg disabled:opacity-50 flex items-center space-x-2 transition-colors duration-200"
                   >
                     {uploading ? (
                       <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
