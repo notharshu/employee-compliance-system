@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabase'
-import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle } from 'react-icons/fa'
+import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaEye, FaTrash } from 'react-icons/fa'
 
 const EmployeeDashboard = () => {
   const { user } = useAuth()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [uploadModal, setUploadModal] = useState(false)
   const [newDocument, setNewDocument] = useState({
     title: '',
@@ -182,9 +183,11 @@ const EmployeeDashboard = () => {
         console.error('Database insert error:', insertError)
         
         // Clean up uploaded file if database insert fails
-        await supabase.storage
-          .from('documents')
-          .remove([uploadData.path])
+        if (uploadData?.path) {
+          await supabase.storage
+            .from('documents')
+            .remove([uploadData.path])
+        }
           
         throw new Error(`Database error: ${insertError.message}`)
       }
@@ -215,6 +218,31 @@ const EmployeeDashboard = () => {
     }
   }
 
+  const viewDocument = async (doc) => {
+    try {
+      // Create signed URL for viewing (1 hour access)
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.file_url, 3600)
+
+      if (error) {
+        console.error('Error creating signed URL:', error)
+        alert('Error accessing document: ' + error.message)
+        return
+      }
+
+      if (data.signedUrl) {
+        // Open document in new tab
+        window.open(data.signedUrl, '_blank')
+      } else {
+        alert('Unable to generate access URL for this document')
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error)
+      alert('Error accessing document: ' + error.message)
+    }
+  }
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'approved': return 'text-green-600 bg-green-100'
@@ -223,39 +251,48 @@ const EmployeeDashboard = () => {
     }
   }
 
-  const handleDeleteDocument = async (documentId, filePath) => {
-    if (!window.confirm('Are you sure you want to delete this document?')) {
+  const handleDeleteDocument = async (doc) => {
+    const documentName = doc.title || doc.file_name || 'this document'
+    
+    if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
       return
     }
 
     try {
-      // Delete from storage if file exists
-      if (filePath) {
-        const { error: storageError } = await supabase.storage
-          .from('documents')
-          .remove([filePath])
-        
-        if (storageError) {
-          console.warn('Failed to delete file from storage:', storageError)
-        }
-      }
+      setDeleting(true)
 
-      // Delete from database
+      // Delete from database first
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
-        .eq('id', documentId)
+        .eq('id', doc.id)
+        .eq('employee_id', user.id) // Ensure user can only delete their own documents
 
       if (dbError) {
-        throw new Error(dbError.message)
+        console.error('Database deletion error:', dbError)
+        throw new Error(`Failed to delete document: ${dbError.message}`)
+      }
+
+      // Delete from storage if file exists
+      if (doc.file_url) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([doc.file_url])
+        
+        if (storageError) {
+          console.warn('Storage deletion warning:', storageError)
+        }
       }
 
       // Refresh documents list
       await fetchDocuments()
       alert('Document deleted successfully!')
+
     } catch (error) {
       console.error('Error deleting document:', error)
-      alert(`Error deleting document: ${error.message}`)
+      alert('Error deleting document: ' + error.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -359,13 +396,27 @@ const EmployeeDashboard = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(doc.created_at).toLocaleDateString()}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <button
-                    onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    Delete
-                  </button>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex space-x-2">
+                    {/* View Document Button */}
+                    <button
+                      onClick={() => viewDocument(doc)}
+                      className="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors duration-200"
+                      title="View Document"
+                    >
+                      <FaEye className="h-4 w-4" />
+                    </button>
+
+                    {/* Delete Document Button */}
+                    <button
+                      onClick={() => handleDeleteDocument(doc)}
+                      disabled={deleting}
+                      className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50 transition-colors duration-200"
+                      title="Delete Document"
+                    >
+                      <FaTrash className="h-4 w-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
