@@ -28,102 +28,72 @@ const HRDashboard = () => {
   }, [user, userProfile])
 
   const fetchAllDocuments = async () => {
-  try {
-    setLoading(true)
-    
-    // First, fetch all documents
-    const { data: documentsData, error: documentsError } = await supabase
-      .from('documents')
-      .select(`
-        id,
-        employee_id,
-        title,
-        file_name,
-        file_url,
-        category,
-        department,
-        description,
-        status,
-        expiry_date,
-        uploaded_at,
-        created_at,
-        review_notes,
-        reviewed_at,
-        reviewed_by
-      `)
-      .order('created_at', { ascending: false })
+    try {
+      setLoading(true)
+      
+      const { data, error } = await supabase
+        .from('documents')
+        .select(`
+          id,
+          employee_id,
+          title,
+          file_name,
+          file_url,
+          category,
+          department,
+          description,
+          status,
+          expiry_date,
+          uploaded_at,
+          created_at,
+          review_notes,
+          reviewed_at,
+          reviewed_by,
+          employee:profiles!documents_employee_id_fkey (
+            id,
+            first_name,
+            last_name,
+            email,
+            designation,
+            role
+          ),
+          reviewer:profiles!documents_reviewed_by_fkey (
+            id,
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false })
 
-    if (documentsError) {
-      console.error('Error fetching documents:', documentsError)
-      throw documentsError
-    }
+      if (error) {
+        console.error('Error fetching documents:', error)
+        throw error
+      }
 
-    console.log('Documents fetched:', documentsData)
-
-    // Then, fetch all unique employee profiles
-    const employeeIds = [...new Set(documentsData.map(doc => doc.employee_id).filter(Boolean))]
-    console.log('Employee IDs to fetch:', employeeIds)
-
-    if (employeeIds.length === 0) {
-      setDocuments(documentsData.map(doc => ({ ...doc, employee: null })))
+      console.log('Fetched documents with profiles:', data)
+      
+      setDocuments(data || [])
+      
+      const totalDocs = data?.length || 0
+      const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
+      const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
+      const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+      
       setStats({
-        total: documentsData.length,
-        pending: documentsData.filter(doc => doc.status === 'pending').length,
-        approved: documentsData.filter(doc => doc.status === 'approved').length,
-        rejected: documentsData.filter(doc => doc.status === 'rejected').length,
+        total: totalDocs,
+        pending: pendingDocs,
+        approved: approvedDocs,
+        rejected: rejectedDocs
       })
-      return
+
+    } catch (error) {
+      console.error('Error fetching documents:', error)
+      alert('Error loading documents: ' + error.message)
+    } finally {
+      setLoading(false)
     }
-
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, first_name, last_name, email, designation, role')
-      .in('id', employeeIds)
-
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError)
-      throw profilesError
-    }
-
-    console.log('Profiles fetched:', profilesData)
-
-    // Create a map of employee_id to profile data
-    const profilesMap = profilesData.reduce((acc, profile) => {
-      acc[profile.id] = profile
-      return acc
-    }, {})
-
-    console.log('Profiles map:', profilesMap)
-
-    // Combine documents with their employee profiles
-    const documentsWithProfiles = documentsData.map(doc => ({
-      ...doc,
-      employee: profilesMap[doc.employee_id] || null
-    }))
-
-    console.log('Final documents with profiles:', documentsWithProfiles)
-    
-    setDocuments(documentsWithProfiles)
-    
-    const totalDocs = documentsWithProfiles.length
-    const pendingDocs = documentsWithProfiles.filter(doc => doc.status === 'pending').length
-    const approvedDocs = documentsWithProfiles.filter(doc => doc.status === 'approved').length
-    const rejectedDocs = documentsWithProfiles.filter(doc => doc.status === 'rejected').length
-    
-    setStats({
-      total: totalDocs,
-      pending: pendingDocs,
-      approved: approvedDocs,
-      rejected: rejectedDocs
-    })
-
-  } catch (error) {
-    console.error('Error fetching documents:', error)
-    alert('Error loading documents: ' + error.message)
-  } finally {
-    setLoading(false)
   }
-}
 
   const handleReviewDocument = async (action) => {
     if (!selectedDocument) return
@@ -202,6 +172,8 @@ const HRDashboard = () => {
     try {
       setDeleting(true)
 
+      console.log('Attempting to delete document with ID:', doc.id)
+      
       const { data, error: dbError } = await supabase
         .from('documents')
         .delete()
@@ -213,8 +185,10 @@ const HRDashboard = () => {
         throw new Error(`Database deletion failed: ${dbError.message}`)
       }
 
+      console.log('Deleted from database:', data)
+
       if (!data || data.length === 0) {
-        throw new Error('No document was deleted')
+        throw new Error('No document was deleted - document may not exist or you may not have permission')
       }
 
       if (doc.file_url) {
@@ -228,12 +202,16 @@ const HRDashboard = () => {
           filePath = filePath.substring(10)
         }
 
+        console.log('Attempting to delete file at path:', filePath)
+
         const { error: storageError } = await supabase.storage
           .from('documents')
           .remove([filePath])
         
         if (storageError) {
-          console.warn('Storage deletion warning:', storageError)
+          console.warn('Storage deletion warning (non-critical):', storageError)
+        } else {
+          console.log('File deleted from storage successfully')
         }
       }
 
@@ -243,12 +221,34 @@ const HRDashboard = () => {
         setReviewNotes('')
       }
 
-      await fetchAllDocuments()
+      setDocuments(prevDocs => prevDocs.filter(d => d.id !== doc.id))
+      
+      setStats(prevStats => {
+        const newStats = { ...prevStats }
+        newStats.total = Math.max(0, newStats.total - 1)
+        
+        if (doc.status === 'pending') {
+          newStats.pending = Math.max(0, newStats.pending - 1)
+        } else if (doc.status === 'approved') {
+          newStats.approved = Math.max(0, newStats.approved - 1)
+        } else if (doc.status === 'rejected') {
+          newStats.rejected = Math.max(0, newStats.rejected - 1)
+        }
+        
+        return newStats
+      })
+
+      setTimeout(() => {
+        fetchAllDocuments()
+      }, 1000)
+
       alert('Document deleted successfully!')
 
     } catch (error) {
       console.error('Error deleting document:', error)
       alert('Error deleting document: ' + error.message)
+      
+      await fetchAllDocuments()
     } finally {
       setDeleting(false)
     }
@@ -267,6 +267,8 @@ const HRDashboard = () => {
       } else {
         filePath = doc.file_url
       }
+
+      console.log('Downloading file from path:', filePath)
 
       const { data, error } = await supabase.storage
         .from('documents')
@@ -292,6 +294,8 @@ const HRDashboard = () => {
       anchor.click()
       document.body.removeChild(anchor)
       URL.revokeObjectURL(url)
+
+      console.log('File downloaded successfully')
       
     } catch (error) {
       console.error('Error downloading document:', error)
@@ -491,16 +495,16 @@ const HRDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.employee_profile?.first_name && doc.employee_profile?.last_name 
-                          ? `${doc.employee_profile.first_name} ${doc.employee_profile.last_name}`
+                        {doc.employee?.first_name && doc.employee?.last_name 
+                          ? `${doc.employee.first_name} ${doc.employee.last_name}`
                           : 'Unknown User'
                         }
                       </div>
                       <div className="text-sm text-gray-500">
-                        {doc.employee_profile?.email || 'No email available'}
+                        {doc.employee?.email || 'No email available'}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {doc.employee_profile?.designation || 'Employee'}
+                        {doc.employee?.designation || 'Employee'}
                       </div>
                     </div>
                   </td>
@@ -633,10 +637,10 @@ const HRDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee:</label>
                   <p className="text-gray-900">
-                    {selectedDocument.employee_profile?.first_name && selectedDocument.employee_profile?.last_name
-                      ? `${selectedDocument.employee_profile.first_name} ${selectedDocument.employee_profile.last_name}`
+                    {selectedDocument.employee?.first_name && selectedDocument.employee?.last_name
+                      ? `${selectedDocument.employee.first_name} ${selectedDocument.employee.last_name}`
                       : 'Unknown User'
-                    } ({selectedDocument.employee_profile?.email || 'No email'})
+                    } ({selectedDocument.employee?.email || 'No email'})
                   </p>
                 </div>
 
