@@ -48,6 +48,15 @@ const Navigation = () => {
                   </Link>
                 </li>
 
+                <li>
+                  <Link
+                    to="/policies"
+                    className={navLinkClass('/policies')}
+                  >
+                    Policies
+                  </Link>
+                </li>
+
                 {userProfile?.role === 'hr' && (
                   <li 
                     className="relative"

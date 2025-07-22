@@ -11,6 +11,7 @@ import EmployeeDashboard from './pages/EmployeeDashboard'
 import HRDashboard from './pages/HRDashboard'
 import Employees from './pages/Employees'
 import EmployeeDocuments from './pages/EmployeeDocuments'
+import CompanyPolicies from './pages/CompanyPolicies'
 
 function App() {
   return (
@@ -22,57 +23,71 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<ComprehensiveRegister />} />
             <Route path="/resend-confirmation" element={<ResendConfirmation />} />
-            
+
             {/* Protected routes */}
-            <Route 
-              path="/dashboard" 
+            <Route
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <Navigation />
                   <EmployeeDashboard />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/hr-dashboard" 
+
+            <Route
+              path="/policies"
               element={
-                <ProtectedRoute requiredRole="hr">
+                <ProtectedRoute>
+                  <Navigation />
+                  <CompanyPolicies />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/hr-dashboard"
+              element={
+                <ProtectedRoute>
                   <Navigation />
                   <HRDashboard />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/profile" 
+
+            <Route
+              path="/employees"
+              element={
+                <ProtectedRoute>
+                  <Navigation />
+                  <Employees />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile"
               element={
                 <ProtectedRoute>
                   <Navigation />
                   <Profile />
                 </ProtectedRoute>
-              } 
+              }
             />
-            <Route 
-              path="/employees" 
+
+            <Route
+              path="/documents"
               element={
-                <ProtectedRoute requiredRole="hr">
-                  <Navigation />
-                  <Employees />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/employee/:id/documents" 
-              element={
-                <ProtectedRoute requiredRole="hr">
+                <ProtectedRoute>
                   <Navigation />
                   <EmployeeDocuments />
                 </ProtectedRoute>
-              } 
+              }
             />
-            
+
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
+
             {/* Catch all route - redirect to dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
