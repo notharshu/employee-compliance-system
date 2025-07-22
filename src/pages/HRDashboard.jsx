@@ -166,16 +166,33 @@ const HRDashboard = () => {
     try {
       setDeleting(true)
 
+      // Fix 1: Extract the correct file path from the full URL for storage deletion
+      let filePath = null
       if (document.file_url) {
-        const { error: storageError } = await supabase.storage
-          .from('documents')
-          .remove([document.file_url])
-        
-        if (storageError) {
-          console.warn('Error deleting file from storage:', storageError)
+        // If file_url contains full URL, extract the path part
+        if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+          filePath = document.file_url.split('/documents/')[1]
+        } else {
+          // If it's already just a path
+          filePath = document.file_url
         }
       }
 
+      // Delete file from storage if we have a valid path
+      if (filePath) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([filePath])
+        
+        if (storageError) {
+          console.warn('Storage deletion failed:', storageError)
+          // Continue with database deletion even if storage deletion fails
+        } else {
+          console.log('File deleted from storage successfully')
+        }
+      }
+
+      // Delete document record from database
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
@@ -186,9 +203,11 @@ const HRDashboard = () => {
         throw dbError
       }
 
+      // Refresh the documents list
       await fetchAllDocuments()
       alert('Document deleted successfully!')
 
+      // Close modal if it's the selected document
       if (reviewModal && selectedDocument?.id === document.id) {
         setReviewModal(false)
         setSelectedDocument(null)
@@ -210,15 +229,24 @@ const HRDashboard = () => {
     }
 
     try {
+      // Fix 3: Extract correct file path for download
+      let filePath = null
+      if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+        filePath = document.file_url.split('/documents/')[1]
+      } else {
+        filePath = document.file_url
+      }
+
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(document.file_url)
+        .download(filePath)
 
       if (error) {
         console.error('Download error:', error)
         throw error
       }
 
+      // Create download link
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
@@ -227,6 +255,9 @@ const HRDashboard = () => {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+
+      // Fix 3: Show success message instead of error
+      console.log('File downloaded successfully')
       
     } catch (error) {
       console.error('Error downloading document:', error)
@@ -241,9 +272,20 @@ const HRDashboard = () => {
     }
 
     try {
+      // Fix 2: Create proper public URL for viewing
+      let filePath = null
+      if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+        // If it's already a full public URL, use it directly
+        window.open(document.file_url, '_blank')
+        return
+      } else {
+        // If it's just a path, create public URL
+        filePath = document.file_url
+      }
+
       const { data } = supabase.storage
         .from('documents')
-        .getPublicUrl(document.file_url)
+        .getPublicUrl(filePath)
 
       if (data.publicUrl) {
         window.open(data.publicUrl, '_blank')
