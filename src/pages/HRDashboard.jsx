@@ -12,30 +12,73 @@ const HRDashboard = () => {
   const [reviewModal, setReviewModal] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
   const [updating, setUpdating] = useState(false)
+  
+  // Statistics state
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0
+  })
 
   useEffect(() => {
-    fetchAllDocuments()
-  }, [])
+    if (user && userProfile?.role === 'hr') {
+      fetchAllDocuments()
+    }
+  }, [user, userProfile])
 
   const fetchAllDocuments = async () => {
     try {
+      setLoading(true)
+      
+      // Fetch all documents with employee profile information
       const { data, error } = await supabase
         .from('documents')
         .select(`
           *,
-          profiles (
+          profiles:employee_id (
+            id,
             first_name,
             last_name,
             email,
-            designation
+            designation,
+            role
           )
         `)
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching documents:', error)
+        throw error
+      }
+
+      console.log('Fetched documents:', data) // Debug log
+      
       setDocuments(data || [])
+      
+      // Calculate statistics from fetched data
+      const totalDocs = data?.length || 0
+      const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
+      const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
+      const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+      
+      setStats({
+        total: totalDocs,
+        pending: pendingDocs,
+        approved: approvedDocs,
+        rejected: rejectedDocs
+      })
+
+      console.log('Statistics calculated:', { // Debug log
+        total: totalDocs,
+        pending: pendingDocs,
+        approved: approvedDocs,
+        rejected: rejectedDocs
+      })
+
     } catch (error) {
       console.error('Error fetching documents:', error)
+      alert('Error loading documents: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -57,46 +100,90 @@ const HRDashboard = () => {
         })
         .eq('id', selectedDocument.id)
 
-      if (error) throw error
+      if (error) {
+        console.error('Error updating document:', error)
+        throw error
+      }
 
+      // Close modal and refresh data
       setReviewModal(false)
       setSelectedDocument(null)
       setReviewNotes('')
+      
+      // Refresh documents and statistics
       await fetchAllDocuments()
       
       alert(`Document ${action === 'approved' ? 'approved' : 'rejected'} successfully!`)
+      
     } catch (error) {
       console.error('Error updating document:', error)
-      alert('Error updating document status')
+      alert('Error updating document status: ' + error.message)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleQuickAction = async (documentId, action) => {
+    try {
+      setUpdating(true)
+      
+      const { error } = await supabase
+        .from('documents')
+        .update({
+          status: action,
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.id
+        })
+        .eq('id', documentId)
+
+      if (error) {
+        console.error('Error updating document:', error)
+        throw error
+      }
+
+      // Refresh documents and statistics
+      await fetchAllDocuments()
+      
+      alert(`Document ${action === 'approved' ? 'approved' : 'rejected'} successfully!`)
+      
+    } catch (error) {
+      console.error('Error updating document:', error)
+      alert('Error updating document status: ' + error.message)
     } finally {
       setUpdating(false)
     }
   }
 
   const downloadDocument = async (document) => {
-    if (!document.file_url) {
+    if (!document.file_path) {
       alert('File not available for download')
       return
     }
 
     try {
+      // Use file_path for storage download
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(document.file_url)
+        .download(document.file_path)
 
-      if (error) throw error
+      if (error) {
+        console.error('Download error:', error)
+        throw error
+      }
 
+      // Create download link
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
-      a.download = document.file_name || 'document'
+      a.download = document.filename || 'document'
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      
     } catch (error) {
       console.error('Error downloading document:', error)
-      alert('Error downloading document')
+      alert('Error downloading document: ' + error.message)
     }
   }
 
@@ -106,8 +193,10 @@ const HRDashboard = () => {
         return 'text-green-600 bg-green-100'
       case 'rejected':
         return 'text-red-600 bg-red-100'
-      default:
+      case 'pending':
         return 'text-yellow-600 bg-yellow-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
     }
   }
 
@@ -116,6 +205,7 @@ const HRDashboard = () => {
     return doc.status === filterStatus
   })
 
+  // Show loading spinner
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -124,11 +214,24 @@ const HRDashboard = () => {
     )
   }
 
+  // Check if user has HR permissions
+  if (userProfile?.role !== 'hr') {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h2 className="text-lg font-semibold text-red-800 mb-2">Access Denied</h2>
+          <p className="text-red-700">You don't have permission to access the HR Dashboard. This page is only available for HR personnel.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto p-6">
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">HR Dashboard</h1>
-        <p className="text-gray-600">Review and manage employee documents</p>
+        <p className="text-gray-600">Review and manage employee documents and compliance</p>
       </div>
 
       {/* Statistics Cards */}
@@ -140,7 +243,7 @@ const HRDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Total Documents</p>
-              <p className="text-2xl font-semibold text-gray-900">{documents.length}</p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
             </div>
           </div>
         </div>
@@ -152,9 +255,7 @@ const HRDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Pending Review</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {documents.filter(d => d.status === 'pending').length}
-              </p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.pending}</p>
             </div>
           </div>
         </div>
@@ -166,9 +267,7 @@ const HRDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Approved</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {documents.filter(d => d.status === 'approved').length}
-              </p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.approved}</p>
             </div>
           </div>
         </div>
@@ -180,22 +279,20 @@ const HRDashboard = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-500">Rejected</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {documents.filter(d => d.status === 'rejected').length}
-              </p>
+              <p className="text-2xl font-semibold text-gray-900">{stats.rejected}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+      {/* Filter Tabs and Documents Table */}
+      <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex space-x-1 mb-6">
           {[
-            { key: 'all', label: 'All Documents' },
-            { key: 'pending', label: 'Pending Review' },
-            { key: 'approved', label: 'Approved' },
-            { key: 'rejected', label: 'Rejected' }
+            { key: 'all', label: 'All Documents', count: stats.total },
+            { key: 'pending', label: 'Pending Review', count: stats.pending },
+            { key: 'approved', label: 'Approved', count: stats.approved },
+            { key: 'rejected', label: 'Rejected', count: stats.rejected }
           ].map((filter) => (
             <button
               key={filter.key}
@@ -206,7 +303,7 @@ const HRDashboard = () => {
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
               }`}
             >
-              {filter.label}
+              {filter.label} ({filter.count})
             </button>
           ))}
         </div>
@@ -242,41 +339,61 @@ const HRDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.profiles?.first_name || 'Unknown'} {doc.profiles?.last_name || 'User'}
+                        {doc.profiles?.first_name && doc.profiles?.last_name 
+                          ? `${doc.profiles.first_name} ${doc.profiles.last_name}`
+                          : 'Unknown User'
+                        }
                       </div>
-                      <div className="text-sm text-gray-500">{doc.profiles?.email}</div>
+                      <div className="text-sm text-gray-500">
+                        {doc.profiles?.email || 'No email available'}
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {doc.profiles?.designation || 'Employee'}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{doc.title}</div>
-                      <div className="text-sm text-gray-500">{doc.description}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {doc.filename || 'Untitled Document'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {doc.description || 'No description'}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{doc.category}</span>
+                    <span className="text-sm text-gray-900 capitalize">
+                      {doc.category || 'Uncategorized'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
-                      {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                      {doc.status ? doc.status.charAt(0).toUpperCase() + doc.status.slice(1) : 'Unknown'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(doc.created_at).toLocaleDateString()}
+                    {doc.uploaded_at 
+                      ? new Date(doc.uploaded_at).toLocaleDateString()
+                      : new Date(doc.created_at).toLocaleDateString()
+                    }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
+                      {/* View/Review Button */}
                       <button
                         onClick={() => {
                           setSelectedDocument(doc)
                           setReviewModal(true)
                         }}
                         className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                        title="Review"
+                        title="View Details"
                       >
                         <FaEye className="h-4 w-4" />
                       </button>
-                      {doc.file_url && (
+
+                      {/* Download Button */}
+                      {doc.file_path && (
                         <button
                           onClick={() => downloadDocument(doc)}
                           className="text-green-600 hover:text-green-900 p-1 rounded"
@@ -285,15 +402,15 @@ const HRDashboard = () => {
                           <FaDownload className="h-4 w-4" />
                         </button>
                       )}
+
+                      {/* Quick Approve/Reject for Pending Documents */}
                       {doc.status === 'pending' && (
                         <>
                           <button
-                            onClick={() => {
-                              setSelectedDocument(doc)
-                              handleReviewDocument('approved')
-                            }}
-                            className="text-green-600 hover:text-green-900 p-1 rounded"
-                            title="Approve"
+                            onClick={() => handleQuickAction(doc.id, 'approved')}
+                            disabled={updating}
+                            className="text-green-600 hover:text-green-900 p-1 rounded disabled:opacity-50"
+                            title="Quick Approve"
                           >
                             <FaCheckCircle className="h-4 w-4" />
                           </button>
@@ -303,7 +420,7 @@ const HRDashboard = () => {
                               setReviewModal(true)
                             }}
                             className="text-red-600 hover:text-red-900 p-1 rounded"
-                            title="Reject"
+                            title="Review/Reject"
                           >
                             <FaTimesCircle className="h-4 w-4" />
                           </button>
@@ -316,10 +433,17 @@ const HRDashboard = () => {
             </tbody>
           </table>
 
+          {/* Empty State */}
           {filteredDocuments.length === 0 && (
             <div className="text-center py-12">
               <FaFileAlt className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-500">No documents found for the selected filter.</p>
+              <p className="text-gray-500 text-lg mb-2">No documents found</p>
+              <p className="text-gray-400">
+                {filterStatus === 'all' 
+                  ? 'No documents have been uploaded yet.'
+                  : `No ${filterStatus} documents found.`
+                }
+              </p>
             </div>
           )}
         </div>
@@ -330,6 +454,7 @@ const HRDashboard = () => {
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
             <div className="mt-3">
+              {/* Modal Header */}
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Review Document</h3>
                 <button
@@ -346,27 +471,43 @@ const HRDashboard = () => {
                 </button>
               </div>
 
+              {/* Document Details */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Title:</label>
-                  <p className="text-gray-900">{selectedDocument.title}</p>
+                  <label className="block text-sm font-medium text-gray-700">Document:</label>
+                  <p className="text-gray-900">{selectedDocument.filename || 'Untitled Document'}</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee:</label>
                   <p className="text-gray-900">
-                    {selectedDocument.profiles?.first_name} {selectedDocument.profiles?.last_name}
+                    {selectedDocument.profiles?.first_name && selectedDocument.profiles?.last_name
+                      ? `${selectedDocument.profiles.first_name} ${selectedDocument.profiles.last_name}`
+                      : 'Unknown User'
+                    } ({selectedDocument.profiles?.email || 'No email'})
                   </p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Category:</label>
-                  <p className="text-gray-900">{selectedDocument.category}</p>
+                  <p className="text-gray-900 capitalize">{selectedDocument.category || 'Uncategorized'}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Department:</label>
+                  <p className="text-gray-900">{selectedDocument.department || 'Not specified'}</p>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description:</label>
                   <p className="text-gray-900">{selectedDocument.description || 'No description provided'}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Current Status:</label>
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedDocument.status)}`}>
+                    {selectedDocument.status ? selectedDocument.status.charAt(0).toUpperCase() + selectedDocument.status.slice(1) : 'Unknown'}
+                  </span>
                 </div>
 
                 <div>
@@ -384,6 +525,7 @@ const HRDashboard = () => {
                 </div>
               </div>
 
+              {/* Modal Actions */}
               <div className="flex justify-end space-x-4 mt-6">
                 <button
                   onClick={() => {
