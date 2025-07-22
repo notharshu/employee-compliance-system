@@ -48,30 +48,21 @@ const Profile = () => {
     setLoading(true)
     setError(null)
 
-    // First, get the current authenticated user to ensure we have the right ID
-    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+    console.log('Current user from context:', user)
     
-    if (userError || !currentUser) {
-      throw new Error('Authentication session invalid. Please sign out and sign back in.')
-    }
-
-    console.log('Authenticated user ID:', currentUser.id)
-    console.log('React user ID:', user?.id)
-    console.log('User email:', currentUser.email)
-
-    // Try to fetch profile using the authenticated user's ID
+    // Try to fetch profile using user.id from context (avoid auth.users access)
     let { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', currentUser.id)
+      .eq('id', user.id)
 
-    // If no profile found by ID, try by email as fallback
-    if (!data || data.length === 0) {
-      console.log('No profile found by ID, trying by email...')
+    // If no results and we have user email, try by email as fallback
+    if ((!data || data.length === 0) && user.email) {
+      console.log('No profile found by ID, trying by email:', user.email)
       const { data: emailData, error: emailError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('email', currentUser.email)
+        .eq('email', user.email)
       
       data = emailData
       error = emailError
