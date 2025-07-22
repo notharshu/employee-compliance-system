@@ -45,11 +45,37 @@ const Profile = () => {
 
   const fetchProfile = async () => {
   try {
-    const { data, error } = await supabase
+    setLoading(true)
+    setError(null)
+
+    // First, get the current authenticated user to ensure we have the right ID
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+    
+    if (userError || !currentUser) {
+      throw new Error('Authentication session invalid. Please sign out and sign back in.')
+    }
+
+    console.log('Authenticated user ID:', currentUser.id)
+    console.log('React user ID:', user?.id)
+    console.log('User email:', currentUser.email)
+
+    // Try to fetch profile using the authenticated user's ID
+    let { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
-      // Remove .single() to handle multiple/no rows gracefully
+      .eq('id', currentUser.id)
+
+    // If no profile found by ID, try by email as fallback
+    if (!data || data.length === 0) {
+      console.log('No profile found by ID, trying by email...')
+      const { data: emailData, error: emailError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', currentUser.email)
+      
+      data = emailData
+      error = emailError
+    }
 
     if (error) throw error
 
@@ -58,7 +84,6 @@ const Profile = () => {
       throw new Error('Profile not found. Please contact HR to create your profile.')
     } else if (data.length > 1) {
       console.warn('Multiple profiles found, using the most recent one')
-      // Use the most recent profile
       const latestProfile = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
       setProfile(latestProfile)
       setFormData({
@@ -77,7 +102,7 @@ const Profile = () => {
         profile_picture_url: latestProfile.profile_picture_url || ''
       })
     } else {
-      // Single profile found - this is the normal case
+      // Single profile found - normal case
       setProfile(data[0])
       setFormData({
         first_name: data[0].first_name || '',
@@ -96,6 +121,7 @@ const Profile = () => {
       })
     }
   } catch (error) {
+    console.error('Profile fetch error:', error)
     setError('Error loading profile: ' + error.message)
   } finally {
     setLoading(false)
