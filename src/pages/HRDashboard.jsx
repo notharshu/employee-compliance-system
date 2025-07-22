@@ -157,147 +157,172 @@ const HRDashboard = () => {
   }
 
   const handleDeleteDocument = async (document) => {
-    const documentName = document.title || document.file_name || 'this document'
-    
-    if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      setDeleting(true)
-
-      // Fix 1: Extract the correct file path from the full URL for storage deletion
-      let filePath = null
-      if (document.file_url) {
-        // If file_url contains full URL, extract the path part
-        if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-          filePath = document.file_url.split('/documents/')[1]
-        } else {
-          // If it's already just a path
-          filePath = document.file_url
-        }
-      }
-
-      // Delete file from storage if we have a valid path
-      if (filePath) {
-        const { error: storageError } = await supabase.storage
-          .from('documents')
-          .remove([filePath])
-        
-        if (storageError) {
-          console.warn('Storage deletion failed:', storageError)
-          // Continue with database deletion even if storage deletion fails
-        } else {
-          console.log('File deleted from storage successfully')
-        }
-      }
-
-      // Delete document record from database
-      const { error: dbError } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', document.id)
-
-      if (dbError) {
-        console.error('Error deleting document from database:', dbError)
-        throw dbError
-      }
-
-      // Refresh the documents list
-      await fetchAllDocuments()
-      alert('Document deleted successfully!')
-
-      // Close modal if it's the selected document
-      if (reviewModal && selectedDocument?.id === document.id) {
-        setReviewModal(false)
-        setSelectedDocument(null)
-        setReviewNotes('')
-      }
-
-    } catch (error) {
-      console.error('Error deleting document:', error)
-      alert('Error deleting document: ' + error.message)
-    } finally {
-      setDeleting(false)
-    }
+  const documentName = document.title || document.file_name || 'this document'
+  
+  if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
+    return
   }
 
-  const downloadDocument = async (document) => {
-    if (!document.file_url) {
-      alert('File not available for download')
-      return
+  try {
+    setDeleting(true)
+
+    const { error: dbError } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', document.id)
+
+    if (dbError) {
+      console.error('Error deleting document from database:', dbError)
+      throw new Error(`Database deletion failed: ${dbError.message}`)
     }
 
-    try {
-      // Fix 3: Extract correct file path for download
+    if (document.file_url) {
       let filePath = null
-      if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+      
+      if (document.file_url.includes('/storage/v1/object/public/documents/')) {
+        filePath = document.file_url.split('/documents/')[1]
+      } else if (document.file_url.includes('/documents/')) {
         filePath = document.file_url.split('/documents/')[1]
       } else {
         filePath = document.file_url
       }
 
-      const { data, error } = await supabase.storage
+      console.log('Attempting to delete file at path:', filePath)
+
+      const { error: storageError } = await supabase.storage
         .from('documents')
-        .download(filePath)
-
-      if (error) {
-        console.error('Download error:', error)
-        throw error
-      }
-
-      // Create download link
-      const url = URL.createObjectURL(data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = document.file_name || 'document'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-
-      // Fix 3: Show success message instead of error
-      console.log('File downloaded successfully')
+        .remove([filePath])
       
-    } catch (error) {
-      console.error('Error downloading document:', error)
-      alert('Error downloading document: ' + error.message)
+      if (storageError) {
+        console.warn('Storage deletion warning:', storageError)
+      } else {
+        console.log('File deleted from storage successfully')
+      }
     }
+
+    // Refresh the documents list
+    await fetchAllDocuments()
+    alert('Document deleted successfully!')
+
+    if (reviewModal && selectedDocument?.id === document.id) {
+      setReviewModal(false)
+      setSelectedDocument(null)
+      setReviewNotes('')
+    }
+
+  } catch (error) {
+    console.error('Error deleting document:', error)
+    alert('Error deleting document: ' + error.message)
+    
+    // If database deletion failed, try to refresh the list anyway
+    try {
+      await fetchAllDocuments()
+    } catch (refreshError) {
+      console.error('Error refreshing documents list:', refreshError)
+    }
+  } finally {
+    setDeleting(false)
+  }
+}
+
+  const downloadDocument = async (document) => {
+  if (!document.file_url) {
+    alert('File not available for download')
+    return
   }
 
-  const viewDocument = async (document) => {
-    if (!document.file_url) {
-      alert('File not available for viewing')
+  try {
+    let filePath = null
+    if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+      filePath = document.file_url.split('/documents/')[1]
+    } else {
+      filePath = document.file_url
+    }
+
+    console.log('Downloading file from path:', filePath)
+
+    const { data, error } = await supabase.storage
+      .from('documents')
+      .download(filePath)
+
+    if (error) {
+      console.error('Download error:', error)
+      alert('Error downloading document: ' + error.message)
       return
     }
 
-    try {
-      // Fix 2: Create proper public URL for viewing
-      let filePath = null
-      if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-        // If it's already a full public URL, use it directly
-        window.open(document.file_url, '_blank')
-        return
-      } else {
-        // If it's just a path, create public URL
-        filePath = document.file_url
-      }
-
-      const { data } = supabase.storage
-        .from('documents')
-        .getPublicUrl(filePath)
-
-      if (data.publicUrl) {
-        window.open(data.publicUrl, '_blank')
-      } else {
-        alert('Unable to generate viewing URL for this document')
-      }
-      
-    } catch (error) {
-      console.error('Error viewing document:', error)
-      alert('Error opening document: ' + error.message)
+    if (!data) {
+      alert('No file data received')
+      return
     }
+
+    const url = URL.createObjectURL(data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = document.file_name || document.title || 'document'
+    document.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    console.log('File downloaded successfully')
+    
+  } catch (error) {
+    console.error('Error downloading document:', error)
+    alert('Error downloading document: ' + error.message)
   }
+}
+
+  const viewDocument = async (document) => {
+  if (!document.file_url) {
+    alert('File not available for viewing')
+    return
+  }
+
+  try {
+    // Extract file path
+    let filePath = null
+    if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+      filePath = document.file_url.split('/documents/')[1]
+    } else {
+      filePath = document.file_url
+    }
+
+    // For HR users, create a signed URL for private bucket access
+    if (userProfile?.role === 'hr') {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 3600) // 1 hour expiry
+
+      if (error) {
+        console.error('Error creating signed URL:', error)
+        throw error
+      }
+
+      if (data.signedUrl) {
+        window.open(data.signedUrl, '_blank')
+        return
+      }
+    }
+
+    // Fallback to public URL
+    const { data } = supabase.storage
+      .from('documents')
+      .getPublicUrl(filePath)
+
+    if (data.publicUrl) {
+      window.open(data.publicUrl, '_blank')
+    } else {
+      alert('Unable to generate viewing URL for this document')
+    }
+    
+  } catch (error) {
+    console.error('Error viewing document:', error)
+    alert('Error opening document: ' + error.message)
+  }
+}
+
 
   const getStatusColor = (status) => {
     switch (status) {
