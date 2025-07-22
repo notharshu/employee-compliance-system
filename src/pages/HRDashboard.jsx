@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../utils/supabase'
-import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaDownload, FaEye } from 'react-icons/fa'
+import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaDownload, FaEye, FaTrash, FaExternalLinkAlt } from 'react-icons/fa'
 
 const HRDashboard = () => {
   const { user, userProfile } = useAuth()
@@ -12,8 +12,8 @@ const HRDashboard = () => {
   const [reviewModal, setReviewModal] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   
-  // Statistics state
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -31,7 +31,6 @@ const HRDashboard = () => {
     try {
       setLoading(true)
       
-      // Fetch all documents with employee profile information
       const { data, error } = await supabase
         .from('documents')
         .select(`
@@ -52,11 +51,10 @@ const HRDashboard = () => {
         throw error
       }
 
-      console.log('Fetched documents:', data) // Debug log
+      console.log('Fetched documents:', data)
       
       setDocuments(data || [])
       
-      // Calculate statistics from fetched data
       const totalDocs = data?.length || 0
       const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
       const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
@@ -69,7 +67,7 @@ const HRDashboard = () => {
         rejected: rejectedDocs
       })
 
-      console.log('Statistics calculated:', { // Debug log
+      console.log('Statistics calculated:', {
         total: totalDocs,
         pending: pendingDocs,
         approved: approvedDocs,
@@ -105,12 +103,10 @@ const HRDashboard = () => {
         throw error
       }
 
-      // Close modal and refresh data
       setReviewModal(false)
       setSelectedDocument(null)
       setReviewNotes('')
       
-      // Refresh documents and statistics
       await fetchAllDocuments()
       
       alert(`Document ${action === 'approved' ? 'approved' : 'rejected'} successfully!`)
@@ -141,7 +137,6 @@ const HRDashboard = () => {
         throw error
       }
 
-      // Refresh documents and statistics
       await fetchAllDocuments()
       
       alert(`Document ${action === 'approved' ? 'approved' : 'rejected'} successfully!`)
@@ -154,6 +149,47 @@ const HRDashboard = () => {
     }
   }
 
+  const handleDeleteDocument = async (document) => {
+    if (!window.confirm(`Are you sure you want to delete "${document.filename}"? This action cannot be undone.`)) {
+      return
+    }
+
+    try {
+      setDeleting(true)
+
+      // Delete file from storage if it exists
+      if (document.file_path) {
+        const { error: storageError } = await supabase.storage
+          .from('documents')
+          .remove([document.file_path])
+        
+        if (storageError) {
+          console.warn('Error deleting file from storage:', storageError)
+        }
+      }
+
+      // Delete document record from database
+      const { error: dbError } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', document.id)
+
+      if (dbError) {
+        console.error('Error deleting document from database:', dbError)
+        throw dbError
+      }
+
+      await fetchAllDocuments()
+      alert('Document deleted successfully!')
+
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert('Error deleting document: ' + error.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const downloadDocument = async (document) => {
     if (!document.file_path) {
       alert('File not available for download')
@@ -161,7 +197,6 @@ const HRDashboard = () => {
     }
 
     try {
-      // Use file_path for storage download
       const { data, error } = await supabase.storage
         .from('documents')
         .download(document.file_path)
@@ -171,7 +206,6 @@ const HRDashboard = () => {
         throw error
       }
 
-      // Create download link
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
@@ -184,6 +218,29 @@ const HRDashboard = () => {
     } catch (error) {
       console.error('Error downloading document:', error)
       alert('Error downloading document: ' + error.message)
+    }
+  }
+
+  const viewDocument = async (document) => {
+    if (!document.file_path) {
+      alert('File not available for viewing')
+      return
+    }
+
+    try {
+      const { data } = supabase.storage
+        .from('documents')
+        .getPublicUrl(document.file_path)
+
+      if (data.publicUrl) {
+        window.open(data.publicUrl, '_blank')
+      } else {
+        alert('Unable to generate viewing URL for this document')
+      }
+      
+    } catch (error) {
+      console.error('Error viewing document:', error)
+      alert('Error opening document: ' + error.message)
     }
   }
 
@@ -205,7 +262,6 @@ const HRDashboard = () => {
     return doc.status === filterStatus
   })
 
-  // Show loading spinner
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -214,7 +270,6 @@ const HRDashboard = () => {
     )
   }
 
-  // Check if user has HR permissions
   if (userProfile?.role !== 'hr') {
     return (
       <div className="max-w-7xl mx-auto p-6">
@@ -228,13 +283,11 @@ const HRDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">HR Dashboard</h1>
         <p className="text-gray-600">Review and manage employee documents and compliance</p>
       </div>
 
-      {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-lg shadow-md">
           <div className="flex items-center">
@@ -285,7 +338,6 @@ const HRDashboard = () => {
         </div>
       </div>
 
-      {/* Filter Tabs and Documents Table */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex space-x-1 mb-6">
           {[
@@ -308,7 +360,6 @@ const HRDashboard = () => {
           ))}
         </div>
 
-        {/* Documents Table */}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -380,7 +431,6 @@ const HRDashboard = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      {/* View/Review Button */}
                       <button
                         onClick={() => {
                           setSelectedDocument(doc)
@@ -392,7 +442,6 @@ const HRDashboard = () => {
                         <FaEye className="h-4 w-4" />
                       </button>
 
-                      {/* Download Button */}
                       {doc.file_path && (
                         <button
                           onClick={() => downloadDocument(doc)}
@@ -403,7 +452,15 @@ const HRDashboard = () => {
                         </button>
                       )}
 
-                      {/* Quick Approve/Reject for Pending Documents */}
+                      <button
+                        onClick={() => handleDeleteDocument(doc)}
+                        disabled={deleting}
+                        className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50"
+                        title="Delete Document"
+                      >
+                        <FaTrash className="h-4 w-4" />
+                      </button>
+
                       {doc.status === 'pending' && (
                         <>
                           <button
@@ -433,7 +490,6 @@ const HRDashboard = () => {
             </tbody>
           </table>
 
-          {/* Empty State */}
           {filteredDocuments.length === 0 && (
             <div className="text-center py-12">
               <FaFileAlt className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -449,12 +505,10 @@ const HRDashboard = () => {
         </div>
       </div>
 
-      {/* Review Modal */}
       {reviewModal && selectedDocument && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
           <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
             <div className="mt-3">
-              {/* Modal Header */}
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Review Document</h3>
                 <button
@@ -471,7 +525,6 @@ const HRDashboard = () => {
                 </button>
               </div>
 
-              {/* Document Details */}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Document:</label>
@@ -510,6 +563,28 @@ const HRDashboard = () => {
                   </span>
                 </div>
 
+                {selectedDocument.file_path && (
+                  <div className="border-t pt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">Document Actions:</label>
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => viewDocument(selectedDocument)}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <FaExternalLinkAlt className="mr-2 h-4 w-4" />
+                        View Document
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(selectedDocument)}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      >
+                        <FaDownload className="mr-2 h-4 w-4" />
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label htmlFor="reviewNotes" className="block text-sm font-medium text-gray-700 mb-2">
                     Review Notes:
@@ -525,7 +600,6 @@ const HRDashboard = () => {
                 </div>
               </div>
 
-              {/* Modal Actions */}
               <div className="flex justify-end space-x-4 mt-6">
                 <button
                   onClick={() => {
