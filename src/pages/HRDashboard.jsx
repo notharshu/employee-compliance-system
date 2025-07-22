@@ -31,12 +31,25 @@ const HRDashboard = () => {
     try {
       setLoading(true)
       
-      // Fixed query - use correct foreign key relationship
       const { data, error } = await supabase
         .from('documents')
         .select(`
-          *,
-          profiles!documents_employee_id_fkey (
+          id,
+          employee_id,
+          filename,
+          file_path,
+          file_url,
+          category,
+          department,
+          description,
+          status,
+          expiry_date,
+          uploaded_at,
+          created_at,
+          review_notes,
+          reviewed_at,
+          reviewed_by,
+          profiles!inner (
             id,
             first_name,
             last_name,
@@ -144,7 +157,9 @@ const HRDashboard = () => {
   }
 
   const handleDeleteDocument = async (document) => {
-    if (!window.confirm(`Are you sure you want to delete "${document.filename}"? This action cannot be undone.`)) {
+    const documentName = document.filename || 'this document'
+    
+    if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
       return
     }
 
@@ -173,6 +188,12 @@ const HRDashboard = () => {
 
       await fetchAllDocuments()
       alert('Document deleted successfully!')
+
+      if (reviewModal && selectedDocument?.id === document.id) {
+        setReviewModal(false)
+        setSelectedDocument(null)
+        setReviewNotes('')
+      }
 
     } catch (error) {
       console.error('Error deleting document:', error)
@@ -556,20 +577,32 @@ const HRDashboard = () => {
                 {selectedDocument.file_path && (
                   <div className="border-t pt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-3">Document Actions:</label>
-                    <div className="flex space-x-3">
+                    <div className="flex flex-wrap gap-3">
                       <button
                         onClick={() => viewDocument(selectedDocument)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        className="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
                       >
                         <FaExternalLinkAlt className="mr-2 h-4 w-4" />
                         View Document
                       </button>
                       <button
                         onClick={() => downloadDocument(selectedDocument)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        className="inline-flex items-center px-3 py-2 border border-green-300 shadow-sm text-sm leading-4 font-medium rounded-md text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
                       >
                         <FaDownload className="mr-2 h-4 w-4" />
                         Download
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(selectedDocument)}
+                        disabled={deleting}
+                        className="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                      >
+                        {deleting ? (
+                          <div className="animate-spin mr-2 h-4 w-4 border-2 border-red-600 border-t-transparent rounded-full"></div>
+                        ) : (
+                          <FaTrash className="mr-2 h-4 w-4" />
+                        )}
+                        {deleting ? 'Deleting...' : 'Delete Document'}
                       </button>
                     </div>
                   </div>
@@ -590,7 +623,7 @@ const HRDashboard = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end space-x-4 mt-6">
+              <div className="flex justify-end space-x-4 mt-6 pt-4 border-t">
                 <button
                   onClick={() => {
                     setReviewModal(false)
