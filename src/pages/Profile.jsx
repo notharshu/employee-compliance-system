@@ -44,37 +44,63 @@ const Profile = () => {
   }, [user])
 
   const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      // Remove .single() to handle multiple/no rows gracefully
 
-      if (error) throw error
+    if (error) throw error
 
-      setProfile(data)
+    // Handle different scenarios
+    if (!data || data.length === 0) {
+      throw new Error('Profile not found. Please contact HR to create your profile.')
+    } else if (data.length > 1) {
+      console.warn('Multiple profiles found, using the most recent one')
+      // Use the most recent profile
+      const latestProfile = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
+      setProfile(latestProfile)
       setFormData({
-        first_name: data.first_name || '',
-        middle_name: data.middle_name || '',
-        last_name: data.last_name || '',
-        phone_number: data.phone_number || '',
-        emergency_contact_name: data.emergency_contact_name || '',
-        emergency_contact_phone: data.emergency_contact_phone || '',
-        permanent_address: data.permanent_address || '',
-        current_address: data.current_address || '',
-        work_location: data.work_location || '',
-        shift_timing: data.shift_timing || '',
-        bank_account_number: data.bank_account_number || '',
-        ifsc_code: data.ifsc_code || '',
-        profile_picture_url: data.profile_picture_url || ''
+        first_name: latestProfile.first_name || '',
+        middle_name: latestProfile.middle_name || '',
+        last_name: latestProfile.last_name || '',
+        phone_number: latestProfile.phone_number || '',
+        emergency_contact_name: latestProfile.emergency_contact_name || '',
+        emergency_contact_phone: latestProfile.emergency_contact_phone || '',
+        permanent_address: latestProfile.permanent_address || '',
+        current_address: latestProfile.current_address || '',
+        work_location: latestProfile.work_location || '',
+        shift_timing: latestProfile.shift_timing || '',
+        bank_account_number: latestProfile.bank_account_number || '',
+        ifsc_code: latestProfile.ifsc_code || '',
+        profile_picture_url: latestProfile.profile_picture_url || ''
       })
-    } catch (error) {
-      setError('Error loading profile: ' + error.message)
-    } finally {
-      setLoading(false)
+    } else {
+      // Single profile found - this is the normal case
+      setProfile(data[0])
+      setFormData({
+        first_name: data[0].first_name || '',
+        middle_name: data[0].middle_name || '',
+        last_name: data[0].last_name || '',
+        phone_number: data[0].phone_number || '',
+        emergency_contact_name: data[0].emergency_contact_name || '',
+        emergency_contact_phone: data[0].emergency_contact_phone || '',
+        permanent_address: data[0].permanent_address || '',
+        current_address: data[0].current_address || '',
+        work_location: data[0].work_location || '',
+        shift_timing: data[0].shift_timing || '',
+        bank_account_number: data[0].bank_account_number || '',
+        ifsc_code: data[0].ifsc_code || '',
+        profile_picture_url: data[0].profile_picture_url || ''
+      })
     }
+  } catch (error) {
+    setError('Error loading profile: ' + error.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleInputChange = (e) => {
     setFormData({
