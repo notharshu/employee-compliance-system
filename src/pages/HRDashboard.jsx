@@ -28,67 +28,52 @@ const HRDashboard = () => {
   }, [user, userProfile])
 
   const fetchAllDocuments = async () => {
-    try {
-      setLoading(true)
-      
-      // Using the correct relationship syntax based on your schema
-      const { data, error } = await supabase
-        .from('documents')
-        .select(`
+  try {
+    setLoading(true)
+    
+    const { data, error } = await supabase
+      .from('documents')
+      .select(`
+        *,
+        profiles!inner (
           id,
-          employee_id,
-          title,
-          file_name,
-          file_url,
-          category,
-          department,
-          description,
-          status,
-          expiry_date,
-          uploaded_at,
-          created_at,
-          review_notes,
-          reviewed_at,
-          reviewed_by,
-          profiles!documents_employee_id_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            designation,
-            role
-          )
-        `)
-        .order('created_at', { ascending: false })
+          first_name,
+          last_name,
+          email,
+          designation,
+          role
+        )
+      `)
+      .order('created_at', { ascending: false })
 
-      if (error) {
-        console.error('Error fetching documents:', error)
-        throw error
-      }
-
-      console.log('Fetched documents with profiles:', data)
-      
-      setDocuments(data || [])
-      
-      const totalDocs = data?.length || 0
-      const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
-      const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
-      const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
-      
-      setStats({
-        total: totalDocs,
-        pending: pendingDocs,
-        approved: approvedDocs,
-        rejected: rejectedDocs
-      })
-
-    } catch (error) {
+    if (error) {
       console.error('Error fetching documents:', error)
-      alert('Error loading documents: ' + error.message)
-    } finally {
-      setLoading(false)
+      throw error
     }
+
+    console.log('Fetched documents with profiles:', data)
+    
+    setDocuments(data || [])
+    
+    const totalDocs = data?.length || 0
+    const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
+    const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
+    const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+    
+    setStats({
+      total: totalDocs,
+      pending: pendingDocs,
+      approved: approvedDocs,
+      rejected: rejectedDocs
+    })
+
+  } catch (error) {
+    console.error('Error fetching documents:', error)
+    alert('Error loading documents: ' + error.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleReviewDocument = async (action) => {
     if (!selectedDocument) return
