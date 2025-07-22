@@ -31,11 +31,12 @@ const HRDashboard = () => {
     try {
       setLoading(true)
       
+      // Fixed query - use correct foreign key relationship
       const { data, error } = await supabase
         .from('documents')
         .select(`
           *,
-          profiles:employee_id (
+          profiles!documents_employee_id_fkey (
             id,
             first_name,
             last_name,
@@ -61,13 +62,6 @@ const HRDashboard = () => {
       const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
       
       setStats({
-        total: totalDocs,
-        pending: pendingDocs,
-        approved: approvedDocs,
-        rejected: rejectedDocs
-      })
-
-      console.log('Statistics calculated:', {
         total: totalDocs,
         pending: pendingDocs,
         approved: approvedDocs,
@@ -157,7 +151,6 @@ const HRDashboard = () => {
     try {
       setDeleting(true)
 
-      // Delete file from storage if it exists
       if (document.file_path) {
         const { error: storageError } = await supabase.storage
           .from('documents')
@@ -168,7 +161,6 @@ const HRDashboard = () => {
         }
       }
 
-      // Delete document record from database
       const { error: dbError } = await supabase
         .from('documents')
         .delete()
@@ -472,12 +464,10 @@ const HRDashboard = () => {
                             <FaCheckCircle className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              setSelectedDocument(doc)
-                              setReviewModal(true)
-                            }}
-                            className="text-red-600 hover:text-red-900 p-1 rounded"
-                            title="Review/Reject"
+                            onClick={() => handleQuickAction(doc.id, 'rejected')}
+                            disabled={updating}
+                            className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50"
+                            title="Quick Reject"
                           >
                             <FaTimesCircle className="h-4 w-4" />
                           </button>
