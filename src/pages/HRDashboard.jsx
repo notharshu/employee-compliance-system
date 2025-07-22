@@ -36,8 +36,8 @@ const HRDashboard = () => {
         .select(`
           id,
           employee_id,
-          filename,
-          file_path,
+          title,
+          file_name,
           file_url,
           category,
           department,
@@ -157,7 +157,7 @@ const HRDashboard = () => {
   }
 
   const handleDeleteDocument = async (document) => {
-    const documentName = document.filename || 'this document'
+    const documentName = document.title || document.file_name || 'this document'
     
     if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
       return
@@ -166,10 +166,10 @@ const HRDashboard = () => {
     try {
       setDeleting(true)
 
-      if (document.file_path) {
+      if (document.file_url) {
         const { error: storageError } = await supabase.storage
           .from('documents')
-          .remove([document.file_path])
+          .remove([document.file_url])
         
         if (storageError) {
           console.warn('Error deleting file from storage:', storageError)
@@ -204,7 +204,7 @@ const HRDashboard = () => {
   }
 
   const downloadDocument = async (document) => {
-    if (!document.file_path) {
+    if (!document.file_url) {
       alert('File not available for download')
       return
     }
@@ -212,7 +212,7 @@ const HRDashboard = () => {
     try {
       const { data, error } = await supabase.storage
         .from('documents')
-        .download(document.file_path)
+        .download(document.file_url)
 
       if (error) {
         console.error('Download error:', error)
@@ -222,7 +222,7 @@ const HRDashboard = () => {
       const url = URL.createObjectURL(data)
       const a = document.createElement('a')
       a.href = url
-      a.download = document.filename || 'document'
+      a.download = document.file_name || 'document'
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -235,7 +235,7 @@ const HRDashboard = () => {
   }
 
   const viewDocument = async (document) => {
-    if (!document.file_path) {
+    if (!document.file_url) {
       alert('File not available for viewing')
       return
     }
@@ -243,7 +243,7 @@ const HRDashboard = () => {
     try {
       const { data } = supabase.storage
         .from('documents')
-        .getPublicUrl(document.file_path)
+        .getPublicUrl(document.file_url)
 
       if (data.publicUrl) {
         window.open(data.publicUrl, '_blank')
@@ -419,7 +419,7 @@ const HRDashboard = () => {
                   <td className="px-6 py-4">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.filename || 'Untitled Document'}
+                        {doc.title || doc.file_name || 'Untitled Document'}
                       </div>
                       <div className="text-sm text-gray-500">
                         {doc.description || 'No description'}
@@ -455,7 +455,7 @@ const HRDashboard = () => {
                         <FaEye className="h-4 w-4" />
                       </button>
 
-                      {doc.file_path && (
+                      {doc.file_url && (
                         <button
                           onClick={() => downloadDocument(doc)}
                           className="text-green-600 hover:text-green-900 p-1 rounded"
@@ -539,7 +539,7 @@ const HRDashboard = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Document:</label>
-                  <p className="text-gray-900">{selectedDocument.filename || 'Untitled Document'}</p>
+                  <p className="text-gray-900">{selectedDocument.title || selectedDocument.file_name || 'Untitled Document'}</p>
                 </div>
 
                 <div>
@@ -574,7 +574,7 @@ const HRDashboard = () => {
                   </span>
                 </div>
 
-                {selectedDocument.file_path && (
+                {selectedDocument.file_url && (
                   <div className="border-t pt-4">
                     <label className="block text-sm font-medium text-gray-700 mb-3">Document Actions:</label>
                     <div className="flex flex-wrap gap-3">
