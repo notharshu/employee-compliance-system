@@ -49,7 +49,7 @@ const HRDashboard = () => {
           review_notes,
           reviewed_at,
           reviewed_by,
-          profiles!documents_employee_id_fkey (
+          employee:profiles!documents_employee_id_fkey (
             id,
             first_name,
             last_name,
@@ -489,16 +489,16 @@ const HRDashboard = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {doc.profiles?.first_name && doc.profiles?.last_name 
-                          ? `${doc.profiles.first_name} ${doc.profiles.last_name}`
+                        {doc.employee?.first_name && doc.employee?.last_name 
+                          ? `${doc.employee.first_name} ${doc.employee.last_name}`
                           : 'Unknown User'
                         }
                       </div>
                       <div className="text-sm text-gray-500">
-                        {doc.profiles?.email || 'No email available'}
+                        {doc.employee?.email || 'No email available'}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {doc.profiles?.designation || 'Employee'}
+                        {doc.employee?.designation || 'Employee'}
                       </div>
                     </div>
                   </td>
@@ -631,10 +631,10 @@ const HRDashboard = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Employee:</label>
                   <p className="text-gray-900">
-                    {selectedDocument.profiles?.first_name && selectedDocument.profiles?.last_name
-                      ? `${selectedDocument.profiles.first_name} ${selectedDocument.profiles.last_name}`
+                    {selectedDocument.employee?.first_name && selectedDocument.employee?.last_name
+                      ? `${selectedDocument.employee.first_name} ${selectedDocument.employee.last_name}`
                       : 'Unknown User'
-                    } ({selectedDocument.profiles?.email || 'No email'})
+                    } ({selectedDocument.employee?.email || 'No email'})
                   </p>
                 </div>
 
