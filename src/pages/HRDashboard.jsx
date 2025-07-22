@@ -156,8 +156,8 @@ const HRDashboard = () => {
     }
   }
 
-  const handleDeleteDocument = async (document) => {
-  const documentName = document.title || document.file_name || 'this document'
+  const handleDeleteDocument = async (doc) => {
+  const documentName = doc.title || doc.file_name || 'this document'
   
   if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
     return
@@ -166,25 +166,30 @@ const HRDashboard = () => {
   try {
     setDeleting(true)
 
+    // Delete from database first
     const { error: dbError } = await supabase
       .from('documents')
       .delete()
-      .eq('id', document.id)
+      .eq('id', doc.id)
 
     if (dbError) {
       console.error('Error deleting document from database:', dbError)
       throw new Error(`Database deletion failed: ${dbError.message}`)
     }
 
-    if (document.file_url) {
-      let filePath = null
+    console.log('Document deleted from database successfully')
+
+    // Try to delete file from storage
+    if (doc.file_url) {
+      let filePath = doc.file_url
       
-      if (document.file_url.includes('/storage/v1/object/public/documents/')) {
-        filePath = document.file_url.split('/documents/')[1]
-      } else if (document.file_url.includes('/documents/')) {
-        filePath = document.file_url.split('/documents/')[1]
-      } else {
-        filePath = document.file_url
+      // Clean up the file path
+      if (filePath.includes('/storage/v1/object/public/documents/')) {
+        filePath = filePath.split('/documents/')[1]
+      } else if (filePath.includes('/documents/')) {
+        filePath = filePath.split('/documents/')[1]
+      } else if (filePath.startsWith('documents/')) {
+        filePath = filePath.substring(10) // Remove 'documents/' prefix
       }
 
       console.log('Attempting to delete file at path:', filePath)
@@ -200,21 +205,23 @@ const HRDashboard = () => {
       }
     }
 
-    // Refresh the documents list
-    await fetchAllDocuments()
-    alert('Document deleted successfully!')
-
-    if (reviewModal && selectedDocument?.id === document.id) {
+    // Close modal first if it's open
+    if (reviewModal && selectedDocument?.id === doc.id) {
       setReviewModal(false)
       setSelectedDocument(null)
       setReviewNotes('')
     }
 
+    // Force refresh the documents list
+    await fetchAllDocuments()
+    
+    alert('Document deleted successfully!')
+
   } catch (error) {
     console.error('Error deleting document:', error)
     alert('Error deleting document: ' + error.message)
     
-    // If database deletion failed, try to refresh the list anyway
+    // Force refresh anyway to show current state
     try {
       await fetchAllDocuments()
     } catch (refreshError) {
@@ -225,18 +232,18 @@ const HRDashboard = () => {
   }
 }
 
-  const downloadDocument = async (document) => {
-  if (!document.file_url) {
+  const downloadDocument = async (doc) => {
+  if (!doc.file_url) {
     alert('File not available for download')
     return
   }
 
   try {
     let filePath = null
-    if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-      filePath = document.file_url.split('/documents/')[1]
+    if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+      filePath = doc.file_url.split('/documents/')[1]
     } else {
-      filePath = document.file_url
+      filePath = doc.file_url
     }
 
     console.log('Downloading file from path:', filePath)
@@ -257,13 +264,13 @@ const HRDashboard = () => {
     }
 
     const url = URL.createObjectURL(data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = document.file_name || document.title || 'document'
-    document.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = doc.file_name || doc.title || 'document'
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
     URL.revokeObjectURL(url)
 
     console.log('File downloaded successfully')
@@ -274,8 +281,8 @@ const HRDashboard = () => {
   }
 }
 
-  const viewDocument = async (document) => {
-  if (!document.file_url) {
+  const viewDocument = async (doc) => {
+  if (!doc.file_url) {
     alert('File not available for viewing')
     return
   }
@@ -283,10 +290,10 @@ const HRDashboard = () => {
   try {
     // Extract file path
     let filePath = null
-    if (document.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
-      filePath = document.file_url.split('/documents/')[1]
+    if (doc.file_url.includes('supabase.co/storage/v1/object/public/documents/')) {
+      filePath = doc.file_url.split('/documents/')[1]
     } else {
-      filePath = document.file_url
+      filePath = doc.file_url
     }
 
     // For HR users, create a signed URL for private bucket access
@@ -322,7 +329,6 @@ const HRDashboard = () => {
     alert('Error opening document: ' + error.message)
   }
 }
-
 
   const getStatusColor = (status) => {
     switch (status) {
