@@ -23,7 +23,7 @@ const Register = () => {
   const { signUp } = useAuth()
   const navigate = useNavigate()
 
-  // Updated departments (same as ComprehensiveRegister.jsx)
+  // Updated departments
   const departments = [
     { value: 'systems', label: 'Systems' },
     { value: 'human_resources', label: 'Human Resources' },
@@ -36,7 +36,7 @@ const Register = () => {
     { value: 'security', label: 'Security' }
   ]
 
-  // Updated designations (same as ComprehensiveRegister.jsx)
+  // Updated designations
   const designations = [
     { value: 'general_manager', label: 'General Manager' },
     { value: 'manager', label: 'Manager' },
@@ -48,85 +48,63 @@ const Register = () => {
   ]
 
   const handleSubmit = async (e) => {
-  e.preventDefault()
-  setLoading(true)
-  setError('')
-  setSuccess('')
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
 
-  if (password !== confirmPassword) {
-    setError('Passwords do not match')
-    setLoading(false)
-    return
-  }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      setLoading(false)
+      return
+    }
 
-  if (password.length < 6) {
-    setError('Password must be at least 6 characters long')
-    setLoading(false)
-    return
-  }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      setLoading(false)
+      return
+    }
 
-  if (!firstName || !lastName || !department || !designation) {
-    setError('Please fill in all required fields')
-    setLoading(false)
-    return
-  }
+    // Validation for required fields
+    if (!firstName || !lastName || !department || !designation) {
+      setError('Please fill in all required fields')
+      setLoading(false)
+      return
+    }
 
-  try {
-    console.log('Starting signup process...')
-    
-    // Include additional data in user metadata for the trigger to use
-    const { data, error } = await signUp(email, password, {
-      data: {
+    try {
+      console.log('Starting signup process...')
+      
+      // Pass metadata for the database trigger to use
+      const userData = {
         first_name: firstName,
         last_name: lastName,
         phone_number: phoneNumber,
         department: department,
         designation: designation
       }
-    })
-    
-    if (error) {
-      console.error('Signup error:', error)
-      setError(error.message)
-    } else if (data.user) {
-      console.log('User created successfully:', data.user.id)
-      
-      // Wait for trigger to complete, then update profile with additional data
-      setTimeout(async () => {
-        try {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              first_name: firstName,
-              last_name: lastName,
-              phone_number: phoneNumber || null,
-              department: department,
-              designation: designation,
-              role: 'employee', // Use 'employee' instead of designation
-              profile_completed: false
-            })
-            .eq('id', data.user.id)
 
-          if (updateError) {
-            console.error('Profile update error:', updateError)
-          }
-        } catch (err) {
-          console.error('Profile update failed:', err)
-        }
-      }, 2000)
+      const { data, error } = await signUp(email, password, {
+        data: userData
+      })
       
-      setSuccess('Account created successfully! You can now log in to your account.')
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
+      if (error) {
+        console.error('Signup error:', error)
+        setError(error.message)
+      } else if (data.user) {
+        console.log('User created successfully:', data.user.id)
+        setSuccess('Account created successfully! You can now log in to your account.')
+        setTimeout(() => {
+          navigate('/login')
+        }, 3000)
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      setError(`An unexpected error occurred: ${err.message}`)
     }
-  } catch (err) {
-    console.error('Unexpected error:', err)
-    setError(`An unexpected error occurred: ${err.message}`)
+    
+    setLoading(false)
   }
-  
-  setLoading(false)
-}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

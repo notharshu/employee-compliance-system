@@ -29,7 +29,7 @@ const ComprehensiveRegister = () => {
   const [permanentAddress, setPermanentAddress] = useState('')
   const [currentAddress, setCurrentAddress] = useState('')
 
-  // Employment Information (removed employeeId)
+  // Employment Information
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
   const [dateOfJoining, setDateOfJoining] = useState('')
@@ -37,12 +37,10 @@ const ComprehensiveRegister = () => {
   const [workLocation, setWorkLocation] = useState('')
   const [shiftTiming, setShiftTiming] = useState('')
 
-  // Removed all compliance information fields
-
   const { signUp } = useAuth()
   const navigate = useNavigate()
 
-  // Updated departments as per your requirements
+  // Updated departments
   const departments = [
     { value: 'systems', label: 'Systems' },
     { value: 'human_resources', label: 'Human Resources' },
@@ -55,7 +53,7 @@ const ComprehensiveRegister = () => {
     { value: 'security', label: 'Security' }
   ]
 
-  // Updated designations as per your requirements
+  // Updated designations
   const designations = [
     { value: 'general_manager', label: 'General Manager' },
     { value: 'manager', label: 'Manager' },
@@ -96,29 +94,28 @@ const ComprehensiveRegister = () => {
   }
 
   const handleSubmit = async (e) => {
-  e.preventDefault()
-  setLoading(true)
-  setError('')
-  setSuccess('')
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
 
-  if (password !== confirmPassword) {
-    setError('Passwords do not match')
-    setLoading(false)
-    return
-  }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      setLoading(false)
+      return
+    }
 
-  if (password.length < 6) {
-    setError('Password must be at least 6 characters long')
-    setLoading(false)
-    return
-  }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      setLoading(false)
+      return
+    }
 
-  try {
-    console.log('Starting comprehensive signup process...')
-    
-    // Include all data in user metadata for the trigger to use
-    const { data, error } = await signUp(email, password, {
-      data: {
+    try {
+      console.log('Starting comprehensive signup process...')
+      
+      // Pass all metadata for the database trigger to use
+      const userData = {
         first_name: firstName,
         middle_name: middleName,
         last_name: lastName,
@@ -137,69 +134,28 @@ const ComprehensiveRegister = () => {
         work_location: workLocation,
         shift_timing: shiftTiming
       }
-    })
-    
-    if (error) {
-      console.error('Signup error:', error)
-      setError(error.message)
-    } else if (data.user) {
-      console.log('User created successfully:', data.user.id)
-      
-      // Wait for trigger to complete, then update profile with all data
-      setTimeout(async () => {
-        try {
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({
-              // Personal Information
-              first_name: firstName,
-              middle_name: middleName || null,
-              last_name: lastName,
-              date_of_birth: dateOfBirth || null,
-              gender: gender || null,
-              blood_group: bloodGroup || null,
-              
-              // Contact Information
-              phone_number: phoneNumber || null,
-              emergency_contact_name: emergencyContactName || null,
-              emergency_contact_phone: emergencyContactPhone || null,
-              permanent_address: permanentAddress || null,
-              current_address: currentAddress || null,
-              
-              // Employment Information
-              department: department,
-              designation: designation,
-              date_of_joining: dateOfJoining || null,
-              reporting_manager: reportingManager || null,
-              work_location: workLocation || null,
-              shift_timing: shiftTiming || null,
-              
-              role: 'employee', // Use 'employee' instead of designation
-              profile_completed: true
-            })
-            .eq('id', data.user.id)
 
-          if (updateError) {
-            console.error('Profile update error:', updateError)
-          }
-        } catch (err) {
-          console.error('Profile update failed:', err)
-        }
-      }, 2000)
+      const { data, error } = await signUp(email, password, {
+        data: userData
+      })
       
-      setSuccess('Registration successful! You can now log in to your account.')
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
+      if (error) {
+        console.error('Signup error:', error)
+        setError(error.message)
+      } else if (data.user) {
+        console.log('User created successfully:', data.user.id)
+        setSuccess('Registration successful! You can now log in to your account.')
+        setTimeout(() => {
+          navigate('/login')
+        }, 3000)
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      setError(`An unexpected error occurred: ${err.message}`)
     }
-  } catch (err) {
-    console.error('Unexpected error:', err)
-    setError(`An unexpected error occurred: ${err.message}`)
+    
+    setLoading(false)
   }
-  
-  setLoading(false)
-}
-
 
   const renderStepContent = () => {
     switch (step) {

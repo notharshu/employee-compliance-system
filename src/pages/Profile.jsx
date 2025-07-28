@@ -44,67 +44,65 @@ const Profile = () => {
   }, [user])
 
   const fetchProfile = async () => {
-    try {
-      setLoading(true)
-      setError('')
-      
-      console.log('Fetching profile for user:', user?.id)
+  try {
+    setLoading(true)
+    setError('')
+    
+    console.log('Fetching profile for user:', user?.id)
 
-      if (!user?.id) {
-        throw new Error('User not authenticated')
-      }
-
-      // Fetch profile using the authenticated user's ID - DO NOT query auth.users
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')  // Only query profiles table
-        .select('*')
-        .eq('id', user.id)  // Use the user ID from your auth context
-        .single()
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError)
-        
-        if (profileError.code === 'PGRST116') {
-          // No profile found
-          throw new Error('Profile not found. Please contact HR or try logging out and back in.')
-        } else {
-          throw new Error(`Failed to load profile: ${profileError.message}`)
-        }
-      }
-
-      if (!profileData) {
-        throw new Error('No profile data returned')
-      }
-
-      console.log('Profile loaded successfully:', profileData)
-      
-      // Set profile data
-      setProfile(profileData)
-      
-      // Set form data for editing
-      setFormData({
-        first_name: profileData.first_name || '',
-        middle_name: profileData.middle_name || '',
-        last_name: profileData.last_name || '',
-        phone_number: profileData.phone_number || '',
-        emergency_contact_name: profileData.emergency_contact_name || '',
-        emergency_contact_phone: profileData.emergency_contact_phone || '',
-        permanent_address: profileData.permanent_address || '',
-        current_address: profileData.current_address || '',
-        work_location: profileData.work_location || '',
-        shift_timing: profileData.shift_timing || '',
-        bank_account_number: profileData.bank_account_number || '',
-        ifsc_code: profileData.ifsc_code || '',
-        profile_picture_url: profileData.profile_picture_url || ''
-      })
-
-    } catch (error) {
-      console.error('Error in fetchProfile:', error)
-      setError(error.message || 'Failed to load profile')
-    } finally {
-      setLoading(false)
+    if (!user?.id) {
+      throw new Error('User not authenticated')
     }
+
+    // ONLY query profiles table - NEVER query auth.users
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')  // Only this table is allowed
+      .select('*')
+      .eq('id', user.id)  // Use user.id from your auth context
+      .single()
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError)
+      
+      if (profileError.code === 'PGRST116') {
+        throw new Error('Profile not found. Please contact support.')
+      } else {
+        throw new Error(`Failed to load profile: ${profileError.message}`)
+      }
+    }
+
+    if (!profileData) {
+      throw new Error('No profile data returned')
+    }
+
+    console.log('Profile loaded successfully:', profileData)
+    setProfile(profileData)
+    
+    // Set form data for editing
+    setFormData({
+      first_name: profileData.first_name || '',
+      middle_name: profileData.middle_name || '',
+      last_name: profileData.last_name || '',
+      phone_number: profileData.phone_number || '',
+      emergency_contact_name: profileData.emergency_contact_name || '',
+      emergency_contact_phone: profileData.emergency_contact_phone || '',
+      permanent_address: profileData.permanent_address || '',
+      current_address: profileData.current_address || '',
+      work_location: profileData.work_location || '',
+      shift_timing: profileData.shift_timing || '',
+      bank_account_number: profileData.bank_account_number || '',
+      ifsc_code: profileData.ifsc_code || '',
+      profile_picture_url: profileData.profile_picture_url || ''
+    })
+
+  } catch (error) {
+    console.error('Error in fetchProfile:', error)
+    setError(error.message || 'Failed to load profile')
+  } finally {
+    setLoading(false)
   }
+}
+
 
   const handleInputChange = (e) => {
     setFormData({
