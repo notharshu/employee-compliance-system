@@ -4,7 +4,6 @@ import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
 
 const Register = () => {
-  const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -14,40 +13,39 @@ const Register = () => {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   
-  // Personal Information
+  // Basic Information
   const [firstName, setFirstName] = useState('')
-  const [middleName, setMiddleName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [dateOfBirth, setDateOfBirth] = useState('')
-  const [gender, setGender] = useState('')
-  const [bloodGroup, setBloodGroup] = useState('')
-  
-  // Contact Information
   const [phoneNumber, setPhoneNumber] = useState('')
-  const [emergencyContactName, setEmergencyContactName] = useState('')
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('')
-  const [permanentAddress, setPermanentAddress] = useState('')
-  const [currentAddress, setCurrentAddress] = useState('')
-  
-  // Employment Information
-  const [employeeId, setEmployeeId] = useState('')
   const [department, setDepartment] = useState('')
   const [designation, setDesignation] = useState('')
-  const [dateOfJoining, setDateOfJoining] = useState('')
-  const [reportingManager, setReportingManager] = useState('')
-  const [workLocation, setWorkLocation] = useState('')
-  const [shiftTiming, setShiftTiming] = useState('')
-  
-  // Compliance Information
-  const [panNumber, setPanNumber] = useState('')
-  const [aadharNumber, setAadharNumber] = useState('')
-  const [pfNumber, setPfNumber] = useState('')
-  const [esiNumber, setEsiNumber] = useState('')
-  const [bankAccountNumber, setBankAccountNumber] = useState('')
-  const [ifscCode, setIfscCode] = useState('')
-  
+
   const { signUp } = useAuth()
   const navigate = useNavigate()
+
+  // Updated departments (same as ComprehensiveRegister.jsx)
+  const departments = [
+    { value: 'systems', label: 'Systems' },
+    { value: 'human_resources', label: 'Human Resources' },
+    { value: 'finance_accounts', label: 'Finance & Accounts' },
+    { value: 'legal', label: 'Legal' },
+    { value: 'administration', label: 'Administration' },
+    { value: 'mining_operations', label: 'Mining & Operations' },
+    { value: 'marketing_sales', label: 'Marketing & Sales' },
+    { value: 'medical', label: 'Medical' },
+    { value: 'security', label: 'Security' }
+  ]
+
+  // Updated designations (same as ComprehensiveRegister.jsx)
+  const designations = [
+    { value: 'general_manager', label: 'General Manager' },
+    { value: 'manager', label: 'Manager' },
+    { value: 'assistant_manager', label: 'Assistant Manager' },
+    { value: 'deputy_manager', label: 'Deputy Manager' },
+    { value: 'management_trainee', label: 'Management Trainee' },
+    { value: 'officer', label: 'Officer' },
+    { value: 'sr_officer', label: 'Sr. Officer' }
+  ]
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -67,20 +65,33 @@ const Register = () => {
       return
     }
 
+    // Validation for required fields
+    if (!firstName || !lastName || !department || !designation) {
+      setError('Please fill in all required fields')
+      setLoading(false)
+      return
+    }
+
     try {
       const { data, error } = await signUp(email, password)
       
       if (error) {
         setError(error.message)
       } else if (data.user) {
-        // Create profile with default employee role
+        // Create basic profile (without Employee ID and compliance fields)
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
             {
               id: data.user.id,
               email: data.user.email,
-              role: 'employee'
+              first_name: firstName,
+              last_name: lastName,
+              phone_number: phoneNumber || null,
+              department: department,
+              designation: designation,
+              role: 'employee',
+              profile_completed: false // Can be completed later in profile page
             }
           ])
 
@@ -120,9 +131,44 @@ const Register = () => {
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
+            {/* Name fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                  First Name *
+                </label>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  required
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                  placeholder="First name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                  Last Name *
+                </label>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  required
+                  className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                  placeholder="Last name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email address
+                Email address *
               </label>
               <input
                 id="email"
@@ -135,10 +181,69 @@ const Register = () => {
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
+
+            <div>
+              <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
+                Phone Number
+              </label>
+              <input
+                id="phoneNumber"
+                name="phoneNumber"
+                type="tel"
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                placeholder="Enter your phone number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+              />
+            </div>
+
+            {/* Department dropdown */}
+            <div>
+              <label htmlFor="department" className="block text-sm font-medium text-gray-700">
+                Department *
+              </label>
+              <select
+                id="department"
+                name="department"
+                required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+              >
+                <option value="">Select Department</option>
+                {departments.map((dept) => (
+                  <option key={dept.value} value={dept.value}>
+                    {dept.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Designation dropdown */}
+            <div>
+              <label htmlFor="designation" className="block text-sm font-medium text-gray-700">
+                Designation *
+              </label>
+              <select
+                id="designation"
+                name="designation"
+                required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+              >
+                <option value="">Select Designation</option>
+                {designations.map((desig) => (
+                  <option key={desig.value} value={desig.value}>
+                    {desig.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
+                Password *
               </label>
               <input
                 id="password"
@@ -154,7 +259,7 @@ const Register = () => {
             
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Confirm Password
+                Confirm Password *
               </label>
               <input
                 id="confirmPassword"
