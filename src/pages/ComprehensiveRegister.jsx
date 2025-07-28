@@ -96,76 +96,66 @@ const ComprehensiveRegister = () => {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  setSuccess('')
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { data, error } = await signUp(email, password)
-      
-      if (error) {
-        setError(error.message)
-      } else if (data.user) {
-        // Create comprehensive profile (without Employee ID and compliance fields)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email: data.user.email,
-              role: 'employee',
-              
-              // Personal Information
-              first_name: firstName,
-              middle_name: middleName,
-              last_name: lastName,
-              date_of_birth: dateOfBirth,
-              gender: gender,
-              blood_group: bloodGroup,
-              
-              // Contact Information
-              phone_number: phoneNumber,
-              emergency_contact_name: emergencyContactName,
-              emergency_contact_phone: emergencyContactPhone,
-              permanent_address: permanentAddress,
-              current_address: currentAddress,
-              
-              // Employment Information (no employee_id)
-              department: department,
-              designation: designation,
-              date_of_joining: dateOfJoining,
-              reporting_manager: reportingManager,
-              work_location: workLocation,
-              shift_timing: shiftTiming,
-              
-              // Removed all compliance fields
-              profile_completed: true
-            }
-          ])
-
-        if (profileError) {
-          console.error('Error creating profile:', profileError)
-          setError('Account created but profile setup failed. Please contact support.')
-        } else {
-          setSuccess('Registration successful! Please check your email to confirm your account.')
-          setTimeout(() => {
-            navigate('/login')
-          }, 3000)
-        }
-      }
-    } catch (err) {
-      setError('An unexpected error occurred')
-    }
+  try {
+    const { data, error } = await signUp(email, password)
     
-    setLoading(false)
+    if (error) {
+      setError(error.message)
+    } else if (data.user) {
+      // Wait a moment for any triggers to complete
+      setTimeout(async () => {
+        try {
+          // Check if profile already exists
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', data.user.id)
+            .single()
+
+          if (!existingProfile) {
+            // Create profile if it doesn't exist
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert([
+                {
+                  id: data.user.id,
+                  email: data.user.email,
+                  first_name: firstName,
+                  last_name: lastName,
+                  phone_number: phoneNumber || null,
+                  department: department,
+                  designation: designation,
+                  role: 'employee',
+                  profile_completed: false
+                }
+              ])
+
+            if (profileError) {
+              console.error('Error creating profile:', profileError)
+              setError('Account created but profile setup had issues. You can complete your profile after logging in.')
+            }
+          }
+        } catch (err) {
+          console.error('Profile creation error:', err)
+        }
+
+        setSuccess('Account created successfully! Please check your email to confirm your account.')
+        setTimeout(() => {
+          navigate('/login')
+        }, 3000)
+      }, 1000) // Wait 1 second for triggers
+    }
+  } catch (err) {
+    setError('An unexpected error occurred')
   }
+  
+  setLoading(false)
+}
 
   const renderStepContent = () => {
     switch (step) {
