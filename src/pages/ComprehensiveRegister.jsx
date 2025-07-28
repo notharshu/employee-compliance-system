@@ -114,52 +114,66 @@ const ComprehensiveRegister = () => {
   }
 
   try {
+    console.log('Starting comprehensive signup process...')
     const { data, error } = await signUp(email, password)
     
     if (error) {
+      console.error('Signup error:', error)
       setError(error.message)
     } else if (data.user) {
-      // Create comprehensive profile with designation as role
+      console.log('User created successfully:', data.user.id)
+      
+      // Wait a moment for auth to fully complete
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const profileData = {
+        id: data.user.id,
+        email: data.user.email,
+        role: designation,
+        
+        // Personal Information
+        first_name: firstName,
+        middle_name: middleName || null,
+        last_name: lastName,
+        date_of_birth: dateOfBirth || null,
+        gender: gender || null,
+        blood_group: bloodGroup || null,
+        
+        // Contact Information
+        phone_number: phoneNumber || null,
+        emergency_contact_name: emergencyContactName || null,
+        emergency_contact_phone: emergencyContactPhone || null,
+        permanent_address: permanentAddress || null,
+        current_address: currentAddress || null,
+        
+        // Employment Information
+        department: department,
+        designation: designation,
+        date_of_joining: dateOfJoining || null,
+        reporting_manager: reportingManager || null,
+        work_location: workLocation || null,
+        shift_timing: shiftTiming || null,
+        
+        profile_completed: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('Creating comprehensive profile with data:', profileData)
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email,
-            role: designation, // Set role to designation value instead of 'employee'
-            
-            // Personal Information
-            first_name: firstName,
-            middle_name: middleName || null,
-            last_name: lastName,
-            date_of_birth: dateOfBirth,
-            gender: gender,
-            blood_group: bloodGroup || null,
-            
-            // Contact Information
-            phone_number: phoneNumber,
-            emergency_contact_name: emergencyContactName || null,
-            emergency_contact_phone: emergencyContactPhone || null,
-            permanent_address: permanentAddress || null,
-            current_address: currentAddress || null,
-            
-            // Employment Information (no employee_id)
-            department: department,
-            designation: designation,
-            date_of_joining: dateOfJoining,
-            reporting_manager: reportingManager || null,
-            work_location: workLocation || null,
-            shift_timing: shiftTiming || null,
-            
-            // Profile completion status
-            profile_completed: true
-          }
-        ])
+        .insert([profileData])
 
       if (profileError) {
-        console.error('Error creating profile:', profileError)
-        setError('Account created but profile setup failed. Please contact support.')
+        console.error('Detailed profile error:', profileError)
+        console.error('Error code:', profileError.code)
+        console.error('Error details:', profileError.details)
+        console.error('Error hint:', profileError.hint)
+        console.error('Error message:', profileError.message)
+        setError(`Profile setup failed: ${profileError.message}. Code: ${profileError.code}`)
       } else {
+        console.log('Comprehensive profile created successfully')
         setSuccess('Registration successful! You can now log in to your account.')
         setTimeout(() => {
           navigate('/login')
@@ -167,7 +181,8 @@ const ComprehensiveRegister = () => {
       }
     }
   } catch (err) {
-    setError('An unexpected error occurred')
+    console.error('Unexpected error:', err)
+    setError(`An unexpected error occurred: ${err.message}`)
   }
   
   setLoading(false)

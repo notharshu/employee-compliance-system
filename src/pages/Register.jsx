@@ -65,7 +65,6 @@ const Register = () => {
     return
   }
 
-  // Validation for required fields
   if (!firstName || !lastName || !department || !designation) {
     setError('Please fill in all required fields')
     setLoading(false)
@@ -73,32 +72,47 @@ const Register = () => {
   }
 
   try {
+    console.log('Starting signup process...')
     const { data, error } = await signUp(email, password)
     
     if (error) {
+      console.error('Signup error:', error)
       setError(error.message)
     } else if (data.user) {
-      // Create basic profile with designation as role
+      console.log('User created successfully:', data.user.id)
+      
+      // Wait a moment for auth to fully complete
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const profileData = {
+        id: data.user.id,
+        email: data.user.email,
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber || null,
+        department: department,
+        designation: designation,
+        role: designation,
+        profile_completed: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      
+      console.log('Creating profile with data:', profileData)
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email,
-            first_name: firstName,
-            last_name: lastName,
-            phone_number: phoneNumber || null,
-            department: department,
-            designation: designation,
-            role: designation, // Set role to designation value
-            profile_completed: false
-          }
-        ])
+        .insert([profileData])
 
       if (profileError) {
-        console.error('Error creating profile:', profileError)
-        setError('Account created but profile setup failed. Please contact support.')
+        console.error('Detailed profile error:', profileError)
+        console.error('Error code:', profileError.code)
+        console.error('Error details:', profileError.details)
+        console.error('Error hint:', profileError.hint)
+        console.error('Error message:', profileError.message)
+        setError(`Profile setup failed: ${profileError.message}. Code: ${profileError.code}`)
       } else {
+        console.log('Profile created successfully')
         setSuccess('Account created successfully! You can now log in to your account.')
         setTimeout(() => {
           navigate('/login')
@@ -106,11 +120,13 @@ const Register = () => {
       }
     }
   } catch (err) {
-    setError('An unexpected error occurred')
+    console.error('Unexpected error:', err)
+    setError(`An unexpected error occurred: ${err.message}`)
   }
   
   setLoading(false)
 }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
