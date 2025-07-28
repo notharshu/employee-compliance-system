@@ -48,69 +48,69 @@ const Register = () => {
   ]
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  setSuccess('')
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long')
-      setLoading(false)
-      return
-    }
-
-    // Validation for required fields
-    if (!firstName || !lastName || !department || !designation) {
-      setError('Please fill in all required fields')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { data, error } = await signUp(email, password)
-      
-      if (error) {
-        setError(error.message)
-      } else if (data.user) {
-        // Create basic profile (without Employee ID and compliance fields)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: data.user.id,
-              email: data.user.email,
-              first_name: firstName,
-              last_name: lastName,
-              phone_number: phoneNumber || null,
-              department: department,
-              designation: designation,
-              role: 'employee',
-              profile_completed: false // Can be completed later in profile page
-            }
-          ])
-
-        if (profileError) {
-          console.error('Error creating profile:', profileError)
-          setError('Account created but profile setup failed. Please contact support.')
-        } else {
-          setSuccess('Account created successfully! Please check your email to confirm your account.')
-          setTimeout(() => {
-            navigate('/login')
-          }, 3000)
-        }
-      }
-    } catch (err) {
-      setError('An unexpected error occurred')
-    }
-    
+  if (password !== confirmPassword) {
+    setError('Passwords do not match')
     setLoading(false)
+    return
   }
+
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters long')
+    setLoading(false)
+    return
+  }
+
+  // Validation for required fields
+  if (!firstName || !lastName || !department || !designation) {
+    setError('Please fill in all required fields')
+    setLoading(false)
+    return
+  }
+
+  try {
+    const { data, error } = await signUp(email, password)
+    
+    if (error) {
+      setError(error.message)
+    } else if (data.user) {
+      // Create basic profile with designation as role
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: data.user.id,
+            email: data.user.email,
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phoneNumber || null,
+            department: department,
+            designation: designation,
+            role: designation, // Set role to designation value
+            profile_completed: false
+          }
+        ])
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+        setError('Account created but profile setup failed. Please contact support.')
+      } else {
+        setSuccess('Account created successfully! You can now log in to your account.')
+        setTimeout(() => {
+          navigate('/login')
+        }, 3000)
+      }
+    }
+  } catch (err) {
+    setError('An unexpected error occurred')
+  }
+  
+  setLoading(false)
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

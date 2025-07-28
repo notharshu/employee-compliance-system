@@ -101,54 +101,70 @@ const ComprehensiveRegister = () => {
   setError('')
   setSuccess('')
 
+  if (password !== confirmPassword) {
+    setError('Passwords do not match')
+    setLoading(false)
+    return
+  }
+
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters long')
+    setLoading(false)
+    return
+  }
+
   try {
     const { data, error } = await signUp(email, password)
     
     if (error) {
       setError(error.message)
     } else if (data.user) {
-      // Wait a moment for any triggers to complete
-      setTimeout(async () => {
-        try {
-          // Check if profile already exists
-          const { data: existingProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', data.user.id)
-            .single()
-
-          if (!existingProfile) {
-            // Create profile if it doesn't exist
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .insert([
-                {
-                  id: data.user.id,
-                  email: data.user.email,
-                  first_name: firstName,
-                  last_name: lastName,
-                  phone_number: phoneNumber || null,
-                  department: department,
-                  designation: designation,
-                  role: 'employee',
-                  profile_completed: false
-                }
-              ])
-
-            if (profileError) {
-              console.error('Error creating profile:', profileError)
-              setError('Account created but profile setup had issues. You can complete your profile after logging in.')
-            }
+      // Create comprehensive profile with designation as role
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: data.user.id,
+            email: data.user.email,
+            role: designation, // Set role to designation value instead of 'employee'
+            
+            // Personal Information
+            first_name: firstName,
+            middle_name: middleName || null,
+            last_name: lastName,
+            date_of_birth: dateOfBirth,
+            gender: gender,
+            blood_group: bloodGroup || null,
+            
+            // Contact Information
+            phone_number: phoneNumber,
+            emergency_contact_name: emergencyContactName || null,
+            emergency_contact_phone: emergencyContactPhone || null,
+            permanent_address: permanentAddress || null,
+            current_address: currentAddress || null,
+            
+            // Employment Information (no employee_id)
+            department: department,
+            designation: designation,
+            date_of_joining: dateOfJoining,
+            reporting_manager: reportingManager || null,
+            work_location: workLocation || null,
+            shift_timing: shiftTiming || null,
+            
+            // Profile completion status
+            profile_completed: true
           }
-        } catch (err) {
-          console.error('Profile creation error:', err)
-        }
+        ])
 
-        setSuccess('Account created successfully! Please check your email to confirm your account.')
+      if (profileError) {
+        console.error('Error creating profile:', profileError)
+        setError('Account created but profile setup failed. Please contact support.')
+      } else {
+        setSuccess('Registration successful! You can now log in to your account.')
         setTimeout(() => {
           navigate('/login')
         }, 3000)
-      }, 1000) // Wait 1 second for triggers
+      }
     }
   } catch (err) {
     setError('An unexpected error occurred')
