@@ -115,7 +115,29 @@ const ComprehensiveRegister = () => {
 
   try {
     console.log('Starting comprehensive signup process...')
-    const { data, error } = await signUp(email, password)
+    
+    // Include all data in user metadata for the trigger to use
+    const { data, error } = await signUp(email, password, {
+      data: {
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+        phone_number: phoneNumber,
+        department: department,
+        designation: designation,
+        date_of_birth: dateOfBirth,
+        gender: gender,
+        blood_group: bloodGroup,
+        emergency_contact_name: emergencyContactName,
+        emergency_contact_phone: emergencyContactPhone,
+        permanent_address: permanentAddress,
+        current_address: currentAddress,
+        date_of_joining: dateOfJoining,
+        reporting_manager: reportingManager,
+        work_location: workLocation,
+        shift_timing: shiftTiming
+      }
+    })
     
     if (error) {
       console.error('Signup error:', error)
@@ -123,62 +145,52 @@ const ComprehensiveRegister = () => {
     } else if (data.user) {
       console.log('User created successfully:', data.user.id)
       
-      // Wait a moment for auth to fully complete
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const profileData = {
-        id: data.user.id,
-        email: data.user.email,
-        role: designation,
-        
-        // Personal Information
-        first_name: firstName,
-        middle_name: middleName || null,
-        last_name: lastName,
-        date_of_birth: dateOfBirth || null,
-        gender: gender || null,
-        blood_group: bloodGroup || null,
-        
-        // Contact Information
-        phone_number: phoneNumber || null,
-        emergency_contact_name: emergencyContactName || null,
-        emergency_contact_phone: emergencyContactPhone || null,
-        permanent_address: permanentAddress || null,
-        current_address: currentAddress || null,
-        
-        // Employment Information
-        department: department,
-        designation: designation,
-        date_of_joining: dateOfJoining || null,
-        reporting_manager: reportingManager || null,
-        work_location: workLocation || null,
-        shift_timing: shiftTiming || null,
-        
-        profile_completed: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      
-      console.log('Creating comprehensive profile with data:', profileData)
+      // Wait for trigger to complete, then update profile with all data
+      setTimeout(async () => {
+        try {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              // Personal Information
+              first_name: firstName,
+              middle_name: middleName || null,
+              last_name: lastName,
+              date_of_birth: dateOfBirth || null,
+              gender: gender || null,
+              blood_group: bloodGroup || null,
+              
+              // Contact Information
+              phone_number: phoneNumber || null,
+              emergency_contact_name: emergencyContactName || null,
+              emergency_contact_phone: emergencyContactPhone || null,
+              permanent_address: permanentAddress || null,
+              current_address: currentAddress || null,
+              
+              // Employment Information
+              department: department,
+              designation: designation,
+              date_of_joining: dateOfJoining || null,
+              reporting_manager: reportingManager || null,
+              work_location: workLocation || null,
+              shift_timing: shiftTiming || null,
+              
+              role: 'employee', // Use 'employee' instead of designation
+              profile_completed: true
+            })
+            .eq('id', data.user.id)
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([profileData])
-
-      if (profileError) {
-        console.error('Detailed profile error:', profileError)
-        console.error('Error code:', profileError.code)
-        console.error('Error details:', profileError.details)
-        console.error('Error hint:', profileError.hint)
-        console.error('Error message:', profileError.message)
-        setError(`Profile setup failed: ${profileError.message}. Code: ${profileError.code}`)
-      } else {
-        console.log('Comprehensive profile created successfully')
-        setSuccess('Registration successful! You can now log in to your account.')
-        setTimeout(() => {
-          navigate('/login')
-        }, 3000)
-      }
+          if (updateError) {
+            console.error('Profile update error:', updateError)
+          }
+        } catch (err) {
+          console.error('Profile update failed:', err)
+        }
+      }, 2000)
+      
+      setSuccess('Registration successful! You can now log in to your account.')
+      setTimeout(() => {
+        navigate('/login')
+      }, 3000)
     }
   } catch (err) {
     console.error('Unexpected error:', err)
@@ -187,6 +199,7 @@ const ComprehensiveRegister = () => {
   
   setLoading(false)
 }
+
 
   const renderStepContent = () => {
     switch (step) {

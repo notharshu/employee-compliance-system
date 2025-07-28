@@ -73,7 +73,17 @@ const Register = () => {
 
   try {
     console.log('Starting signup process...')
-    const { data, error } = await signUp(email, password)
+    
+    // Include additional data in user metadata for the trigger to use
+    const { data, error } = await signUp(email, password, {
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        phone_number: phoneNumber,
+        department: department,
+        designation: designation
+      }
+    })
     
     if (error) {
       console.error('Signup error:', error)
@@ -81,43 +91,34 @@ const Register = () => {
     } else if (data.user) {
       console.log('User created successfully:', data.user.id)
       
-      // Wait a moment for auth to fully complete
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const profileData = {
-        id: data.user.id,
-        email: data.user.email,
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: phoneNumber || null,
-        department: department,
-        designation: designation,
-        role: designation,
-        profile_completed: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      
-      console.log('Creating profile with data:', profileData)
+      // Wait for trigger to complete, then update profile with additional data
+      setTimeout(async () => {
+        try {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              first_name: firstName,
+              last_name: lastName,
+              phone_number: phoneNumber || null,
+              department: department,
+              designation: designation,
+              role: 'employee', // Use 'employee' instead of designation
+              profile_completed: false
+            })
+            .eq('id', data.user.id)
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([profileData])
-
-      if (profileError) {
-        console.error('Detailed profile error:', profileError)
-        console.error('Error code:', profileError.code)
-        console.error('Error details:', profileError.details)
-        console.error('Error hint:', profileError.hint)
-        console.error('Error message:', profileError.message)
-        setError(`Profile setup failed: ${profileError.message}. Code: ${profileError.code}`)
-      } else {
-        console.log('Profile created successfully')
-        setSuccess('Account created successfully! You can now log in to your account.')
-        setTimeout(() => {
-          navigate('/login')
-        }, 3000)
-      }
+          if (updateError) {
+            console.error('Profile update error:', updateError)
+          }
+        } catch (err) {
+          console.error('Profile update failed:', err)
+        }
+      }, 2000)
+      
+      setSuccess('Account created successfully! You can now log in to your account.')
+      setTimeout(() => {
+        navigate('/login')
+      }, 3000)
     }
   } catch (err) {
     console.error('Unexpected error:', err)
@@ -126,7 +127,6 @@ const Register = () => {
   
   setLoading(false)
 }
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
