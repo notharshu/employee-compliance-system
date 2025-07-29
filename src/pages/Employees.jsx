@@ -1,32 +1,38 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
 import { FaSearch, FaEye, FaTrash, FaTimes } from 'react-icons/fa'
 
 const Employees = () => {
   const { user, userProfile } = useAuth()
+  const navigate = useNavigate()
   const [employees, setEmployees] = useState([])
   const [filteredEmployees, setFilteredEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [roleFilter, setRoleFilter] = useState('all')
+  const [designationFilter, setDesignationFilter] = useState('all')
   const [selectedEmployee, setSelectedEmployee] = useState(null)
   const [viewModal, setViewModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    fetchEmployees()
-  }, [])
+    // Check if user has permission (General Manager or Manager)
+    if (user && userProfile && 
+        (userProfile.designation === 'general_manager' || userProfile.designation === 'manager')) {
+      fetchEmployees()
+    }
+  }, [user, userProfile])
 
   useEffect(() => {
     filterEmployees()
-  }, [searchTerm, roleFilter, employees])
+  }, [searchTerm, designationFilter, employees])
 
   const fetchEmployees = async () => {
     try {
       setLoading(true)
       
-      // Fetch all profiles (including HR) with comprehensive data
+      // Fetch ALL employees from ALL departments (no department filtering)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
@@ -35,14 +41,12 @@ const Employees = () => {
           middle_name,
           last_name,
           email,
-          role,
           department,
           designation,
           date_of_joining,
           created_at,
           profile_completed,
           phone_number,
-          employee_id,
           gender,
           blood_group,
           emergency_contact_name,
@@ -60,39 +64,37 @@ const Employees = () => {
         return
       }
 
-      console.log('Raw profiles data:', profiles) // Debug log
+      console.log('Raw profiles data:', profiles)
 
       // Fetch document counts
       const { data: documents } = await supabase
         .from('documents')
-        .select('employee_id')
+        .select('uploaded_by')
 
       // Count documents per employee
       const documentCounts = {}
       documents?.forEach(doc => {
-        if (doc.employee_id) {
-          documentCounts[doc.employee_id] = (documentCounts[doc.employee_id] || 0) + 1
+        if (doc.uploaded_by) {
+          documentCounts[doc.uploaded_by] = (documentCounts[doc.uploaded_by] || 0) + 1
         }
       })
 
       // Transform profiles to employee format
       const transformedEmployees = profiles.map(profile => ({
-        ...profile, // Keep all original profile data for modal
+        ...profile,
         name: [profile.first_name, profile.middle_name, profile.last_name]
           .filter(Boolean)
           .join(' ') || profile.email || 'N/A',
-        joinedDate: profile.date_of_joining 
+        joinedDate: profile.date_of_joining
           ? new Date(profile.date_of_joining).toLocaleDateString()
           : new Date(profile.created_at).toLocaleDateString(),
         documentsCount: documentCounts[profile.id] || 0,
         status: profile.profile_completed ? 'active' : 'incomplete'
       }))
 
-      console.log('Transformed employees:', transformedEmployees) // Debug log
-
+      console.log('Transformed employees:', transformedEmployees)
       setEmployees(transformedEmployees)
       setFilteredEmployees(transformedEmployees)
-      
     } catch (error) {
       console.error('Error fetching employees:', error)
     } finally {
@@ -105,18 +107,17 @@ const Employees = () => {
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(emp => 
+      filtered = filtered.filter(emp =>
         emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.designation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.employee_id?.toLowerCase().includes(searchTerm.toLowerCase())
+        emp.designation?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
-    // Filter by role
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(emp => emp.role === roleFilter)
+    // Filter by designation
+    if (designationFilter !== 'all') {
+      filtered = filtered.filter(emp => emp.designation === designationFilter)
     }
 
     setFilteredEmployees(filtered)
@@ -135,14 +136,22 @@ const Employees = () => {
     }
   }
 
-  const getRoleColor = (role) => {
-    switch (role) {
-      case 'hr':
+  const getDesignationColor = (designation) => {
+    switch (designation) {
+      case 'general_manager':
         return 'bg-purple-100 text-purple-800'
-      case 'admin':
-        return 'bg-red-100 text-red-800'
-      case 'employee':
+      case 'manager':
         return 'bg-blue-100 text-blue-800'
+      case 'assistant_manager':
+        return 'bg-indigo-100 text-indigo-800'
+      case 'deputy_manager':
+        return 'bg-cyan-100 text-cyan-800'
+      case 'management_trainee':
+        return 'bg-pink-100 text-pink-800'
+      case 'officer':
+        return 'bg-green-100 text-green-800'
+      case 'sr_officer':
+        return 'bg-emerald-100 text-emerald-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -151,6 +160,10 @@ const Employees = () => {
   const handleViewEmployee = (employee) => {
     setSelectedEmployee(employee)
     setViewModal(true)
+  }
+
+  const handleViewDocuments = (employeeId) => {
+    navigate(`/employee-documents/${employeeId}`)
   }
 
   const handleDeleteEmployee = async (employee) => {
@@ -165,7 +178,7 @@ const Employees = () => {
       const { error: documentsError } = await supabase
         .from('documents')
         .delete()
-        .eq('employee_id', employee.id)
+        .eq('uploaded_by', employee.id)
 
       if (documentsError) {
         console.error('Error deleting employee documents:', documentsError)
@@ -187,7 +200,6 @@ const Employees = () => {
       // Refresh the employee list
       await fetchEmployees()
       alert('Employee deleted successfully!')
-      
     } catch (error) {
       console.error('Error deleting employee:', error)
       alert('Error deleting employee: ' + error.message)
@@ -201,208 +213,258 @@ const Employees = () => {
     setSelectedEmployee(null)
   }
 
-  if (loading) {
+  // Check access permission - Allow General Managers and Managers
+  if (!userProfile || 
+      (userProfile.designation !== 'general_manager' && userProfile.designation !== 'manager')) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h3 className="text-lg font-medium text-red-800 mb-2">Access Denied</h3>
+            <p className="text-red-600">
+              You don't have permission to access the Employee Management page. 
+              This page is only available for General Managers and Managers.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
-  if (userProfile?.role !== 'hr') {
+  if (loading) {
     return (
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-red-800 mb-2">Access Denied</h2>
-          <p className="text-red-700">You don't have permission to access the Employee Management page. This page is only available for HR personnel.</p>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading employees...</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Employee Management</h1>
-        <p className="text-gray-600">Manage employee profiles and information</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Employee Management - All Departments
+          </h1>
+          <p className="text-gray-600">
+            Manage employee profiles and information across all departments
+          </p>
+        </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-blue-100">
-              <FaEye className="h-6 w-6 text-blue-600" />
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Employees</p>
+                <p className="text-2xl font-bold text-gray-900">{employees.length}</p>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Total Employees</p>
-              <p className="text-2xl font-semibold text-gray-900">{employees.length}</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Active</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {employees.filter(emp => emp.status === 'active').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Incomplete Profiles</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {employees.filter(emp => emp.status === 'incomplete').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Managers</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {employees.filter(emp => 
+                    emp.designation === 'general_manager' || 
+                    emp.designation === 'manager' ||
+                    emp.designation === 'assistant_manager' ||
+                    emp.designation === 'deputy_manager'
+                  ).length}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-green-100">
-              <FaEye className="h-6 w-6 text-green-600" />
+        {/* Search and Filter Controls */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search employees by name, email, department, or designation..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Active</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {employees.filter(emp => emp.status === 'active').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-yellow-100">
-              <FaEye className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Incomplete Profiles</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {employees.filter(emp => emp.status === 'incomplete').length}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex items-center">
-            <div className="p-3 rounded-full bg-purple-100">
-              <FaEye className="h-6 w-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">HR Users</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {employees.filter(emp => emp.role === 'hr').length}
-              </p>
+            <div className="md:w-48">
+              <select
+                value={designationFilter}
+                onChange={(e) => setDesignationFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">All Designations</option>
+                <option value="general_manager">General Manager</option>
+                <option value="manager">Manager</option>
+                <option value="assistant_manager">Assistant Manager</option>
+                <option value="deputy_manager">Deputy Manager</option>
+                <option value="management_trainee">Management Trainee</option>
+                <option value="officer">Officer</option>
+                <option value="sr_officer">Sr. Officer</option>
+              </select>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Filters and Search */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search employees..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            <option value="all">All Roles</option>
-            <option value="employee">Employee</option>
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Employees Table */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Employee
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Joined Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Documents
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredEmployees.map((employee) => (
-                <tr key={employee.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {employee.name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {employee.email}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {employee.department || 'Not Assigned'} • {employee.designation || 'Not Assigned'}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(employee.role)}`}>
-                      {employee.role?.toUpperCase() || 'EMPLOYEE'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(employee.status)}`}>
-                      {employee.status?.charAt(0).toUpperCase() + employee.status?.slice(1) || 'Active'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {employee.joinedDate}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
-                      {employee.documentsCount} docs
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleViewEmployee(employee)}
-                        className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                        title="View Employee Profile"
-                      >
-                        <FaEye className="h-4 w-4" />
-                      </button>
-                      {employee.id !== user?.id && (
-                        <button
-                          onClick={() => handleDeleteEmployee(employee)}
-                          disabled={deleting}
-                          className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50"
-                          title="Delete Employee"
-                        >
-                          <FaTrash className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+        {/* Employees Table */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Employee
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Designation
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Joined Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Documents
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredEmployees.map((employee) => (
+                  <tr key={employee.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {employee.name}
+                        </div>
+                        <div className="text-sm text-gray-500">{employee.email}</div>
+                        <div className="text-xs text-gray-400">
+                          {employee.department || 'Not Assigned'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getDesignationColor(employee.designation)}`}>
+                        {employee.designation?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Employee'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(employee.status)}`}>
+                        {employee.status?.charAt(0).toUpperCase() + employee.status?.slice(1) || 'Active'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {employee.joinedDate}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <button
+                        onClick={() => handleViewDocuments(employee.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        {employee.documentsCount} docs
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={() => handleViewEmployee(employee)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="View Details"
+                        >
+                          <FaEye />
+                        </button>
+                        {employee.id !== user?.id && (
+                          <button
+                            onClick={() => handleDeleteEmployee(employee)}
+                            disabled={deleting}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            title="Delete Employee"
+                          >
+                            <FaTrash />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {filteredEmployees.length === 0 && (
             <div className="text-center py-12">
-              <FaEye className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-500 text-lg mb-2">No employees found</p>
-              <p className="text-gray-400">
-                {searchTerm || roleFilter !== 'all' 
+              <svg
+                className="mx-auto h-12 w-12 text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No employees found</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                {searchTerm || designationFilter !== 'all'
                   ? 'Try adjusting your search criteria.'
                   : 'No employees have been added to the system yet.'
                 }
@@ -412,145 +474,79 @@ const Employees = () => {
         </div>
       </div>
 
-      {/* Employee View Modal */}
+      {/* Employee Details Modal */}
       {viewModal && selectedEmployee && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white max-h-screen overflow-y-auto">
-            <div className="mt-3">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-semibold text-gray-900">Employee Profile</h3>
-                <button
-                  onClick={closeModal}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <FaTimes className="w-6 h-6" />
-                </button>
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Employee Details</h3>
+              <button
+                onClick={closeModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Personal Information</h4>
+                <div className="space-y-2">
+                  <div><span className="font-medium">Name:</span> {selectedEmployee.name}</div>
+                  <div><span className="font-medium">Email:</span> {selectedEmployee.email || 'N/A'}</div>
+                  <div><span className="font-medium">Phone:</span> {selectedEmployee.phone_number || 'N/A'}</div>
+                  <div><span className="font-medium">Gender:</span> {selectedEmployee.gender || 'N/A'}</div>
+                  <div><span className="font-medium">Blood Group:</span> {selectedEmployee.blood_group || 'N/A'}</div>
+                </div>
               </div>
 
-              <div className="space-y-6">
-                {/* Personal Information */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                      <p className="text-gray-900">{selectedEmployee.name}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Email</label>
-                      <p className="text-gray-900">{selectedEmployee.email || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                      <p className="text-gray-900">{selectedEmployee.phone_number || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Gender</label>
-                      <p className="text-gray-900 capitalize">{selectedEmployee.gender || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Blood Group</label>
-                      <p className="text-gray-900">{selectedEmployee.blood_group || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Employee ID</label>
-                      <p className="text-gray-900">{selectedEmployee.employee_id || 'N/A'}</p>
-                    </div>
-                  </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Employment Information</h4>
+                <div className="space-y-2">
+                  <div><span className="font-medium">Department:</span> {selectedEmployee.department || 'Not Assigned'}</div>
+                  <div><span className="font-medium">Designation:</span> {selectedEmployee.designation?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Not Assigned'}</div>
+                  <div><span className="font-medium">Reporting Manager:</span> {selectedEmployee.reporting_manager || 'N/A'}</div>
+                  <div><span className="font-medium">Work Location:</span> {selectedEmployee.work_location || 'N/A'}</div>
+                  <div><span className="font-medium">Shift Timing:</span> {selectedEmployee.shift_timing || 'N/A'}</div>
+                  <div><span className="font-medium">Joined Date:</span> {selectedEmployee.joinedDate}</div>
+                  <div><span className="font-medium">Documents:</span> {selectedEmployee.documentsCount} documents</div>
                 </div>
+              </div>
 
-                {/* Work Information */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4">Work Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Department</label>
-                      <p className="text-gray-900">{selectedEmployee.department || 'Not Assigned'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Designation</label>
-                      <p className="text-gray-900">{selectedEmployee.designation || 'Not Assigned'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Role</label>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(selectedEmployee.role)}`}>
-                        {selectedEmployee.role?.toUpperCase() || 'EMPLOYEE'}
-                      </span>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Reporting Manager</label>
-                      <p className="text-gray-900">{selectedEmployee.reporting_manager || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Work Location</label>
-                      <p className="text-gray-900">{selectedEmployee.work_location || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Shift Timing</label>
-                      <p className="text-gray-900">{selectedEmployee.shift_timing || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Date of Joining</label>
-                      <p className="text-gray-900">{selectedEmployee.joinedDate}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Documents Uploaded</label>
-                      <p className="text-gray-900">{selectedEmployee.documentsCount} documents</p>
-                    </div>
+              <div className="md:col-span-2">
+                <h4 className="font-semibold text-gray-700 mb-2">Address Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium">Permanent Address:</span>
+                    <p className="text-gray-600">{selectedEmployee.permanent_address || 'N/A'}</p>
                   </div>
-                </div>
-
-                {/* Contact Information */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h4>
-                  <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Permanent Address</label>
-                      <p className="text-gray-900">{selectedEmployee.permanent_address || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Current Address</label>
-                      <p className="text-gray-900">{selectedEmployee.current_address || 'N/A'}</p>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
-                        <p className="text-gray-900">{selectedEmployee.emergency_contact_name || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Emergency Contact Phone</label>
-                        <p className="text-gray-900">{selectedEmployee.emergency_contact_phone || 'N/A'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Profile Status */}
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="text-lg font-medium text-gray-900 mb-4">Profile Status</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Profile Status</label>
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedEmployee.status)}`}>
-                        {selectedEmployee.status?.charAt(0).toUpperCase() + selectedEmployee.status?.slice(1) || 'Active'}
-                      </span>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Profile Completed</label>
-                      <p className="text-gray-900">{selectedEmployee.profile_completed ? 'Yes' : 'No'}</p>
-                    </div>
+                  <div>
+                    <span className="font-medium">Current Address:</span>
+                    <p className="text-gray-600">{selectedEmployee.current_address || 'N/A'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end mt-6 pt-4 border-t">
-                <button
-                  onClick={closeModal}
-                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200"
-                >
-                  Close
-                </button>
+              <div className="md:col-span-2">
+                <h4 className="font-semibold text-gray-700 mb-2">Emergency Contact</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div><span className="font-medium">Name:</span> {selectedEmployee.emergency_contact_name || 'N/A'}</div>
+                  <div><span className="font-medium">Phone:</span> {selectedEmployee.emergency_contact_phone || 'N/A'}</div>
+                </div>
               </div>
+
+              <div className="md:col-span-2">
+                <div><span className="font-medium">Profile Completed:</span> {selectedEmployee.profile_completed ? 'Yes' : 'No'}</div>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
