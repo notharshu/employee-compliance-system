@@ -8,7 +8,7 @@ import ComprehensiveRegister from './pages/ComprehensiveRegister'
 import ResendConfirmation from './pages/ResendConfirmation'
 import Profile from './pages/Profile'
 import EmployeeDashboard from './pages/EmployeeDashboard'
-import HRDashboard from './pages/HRDashboard'
+import GeneralManagerDashboard from './pages/GeneralManagerDashboard'
 import Employees from './pages/Employees'
 import EmployeeDocuments from './pages/EmployeeDocuments'
 import CompanyPolicies from './pages/CompanyPolicies'
@@ -46,11 +46,11 @@ function App() {
             />
 
             <Route
-              path="/hr-dashboard"
+              path="/general-manager-dashboard"
               element={
                 <ProtectedRoute>
                   <Navigation />
-                  <HRDashboard />
+                  <GeneralManagerDashboard />
                 </ProtectedRoute>
               }
             />
@@ -71,6 +71,16 @@ function App() {
                 <ProtectedRoute>
                   <Navigation />
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/employee-documents/:id"
+              element={
+                <ProtectedRoute>
+                  <Navigation />
+                  <EmployeeDocuments />
                 </ProtectedRoute>
               }
             />

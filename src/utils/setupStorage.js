@@ -7,8 +7,8 @@ import { supabase } from './supabase.js'
 export const setupStorageBuckets = async () => {
   try {
     console.log('Setting up storage buckets...')
-
-    // Check if documents bucket exists
+    
+    // Check if buckets exist
     const { data: buckets, error: listError } = await supabase.storage.listBuckets()
     
     if (listError) {
@@ -67,7 +67,6 @@ export const setupStorageBuckets = async () => {
 
     console.log('Storage setup completed successfully!')
     return true
-
   } catch (error) {
     console.error('Error setting up storage:', error)
     return false
@@ -107,7 +106,6 @@ export const testStorageUpload = async () => {
       
       return true
     }
-
   } catch (error) {
     console.error('Error testing storage:', error)
     return false
@@ -121,16 +119,19 @@ export const checkDatabaseSchema = async () => {
   try {
     console.log('Checking database schema...')
     
-    // Try to insert a test record (will fail but show us the expected structure)
+    // Test with the new documents table structure
     const testData = {
-      employee_id: 'test-id',
-      title: 'test',
-      category: 'test',
-      department: 'test',
-      file_name: 'test.txt',
+      filename: 'test.txt',
+      file_path: 'test/test-file.txt',
       file_size: 100,
-      mime_type: 'text/plain',
-      status: 'pending'
+      file_type: 'text/plain',
+      title: 'Test Document',
+      description: 'Test description', 
+      document_type: 'policy',
+      department: 'systems', // Must match your department constraint
+      upload_department: 'systems',
+      status: 'pending',
+      uploaded_by: '00000000-0000-0000-0000-000000000000' // Test UUID
     }
 
     const { data, error } = await supabase
@@ -146,22 +147,24 @@ export const checkDatabaseSchema = async () => {
         console.error('Documents table does not exist!')
         return false
       }
-      
+
       // Check for missing columns
       if (error.message?.includes('column') && error.message?.includes('does not exist')) {
         console.error('Missing database columns detected!')
+        console.error('Expected columns: filename, file_path, file_size, file_type, title, description, document_type, department, upload_department, status, uploaded_by')
         return false
       }
-      
-      // If it's just a constraint violation, that's actually good - means table structure is correct
-      if (error.code === '23505' || error.code === '23502') {
-        console.log('Database schema appears to be correct (constraint violation expected)')
+
+      // If it's a constraint violation (like foreign key for uploaded_by), that's expected
+      if (error.code === '23505' || error.code === '23502' || error.code === '23503') {
+        console.log('Database schema appears to be correct (constraint violation expected for test data)')
         return true
       }
-      
+
       return false
     } else {
       console.log('Database schema check passed')
+      
       // Clean up test record
       if (data && data[0]) {
         await supabase
@@ -169,9 +172,9 @@ export const checkDatabaseSchema = async () => {
           .delete()
           .eq('id', data[0].id)
       }
+      
       return true
     }
-
   } catch (error) {
     console.error('Error checking database schema:', error)
     return false
