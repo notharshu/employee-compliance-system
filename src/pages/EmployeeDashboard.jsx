@@ -574,7 +574,7 @@ const EmployeeDashboard = () => {
         <div className="flex justify-end space-x-3">
           <button
             type="button"
-            onClick={closeModal}
+            onClick={closeUploadModal}
             className="rounded border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-100"
             disabled={uploading}
           >
