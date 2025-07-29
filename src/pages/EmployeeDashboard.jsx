@@ -486,7 +486,7 @@ const EmployeeDashboard = () => {
         <button
           type="button"
           aria-label="Close"
-          onClick={closeModal}
+          onClick={closeUploadModal}
           className="text-gray-600 hover:text-gray-900"
         >
           <FaTimes size={24} />
