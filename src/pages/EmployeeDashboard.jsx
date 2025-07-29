@@ -1,21 +1,23 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabase'
-import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaEye, FaTrash } from 'react-icons/fa'
+import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaEye, FaTrash, FaUpload, FaTimes, FaFileUpload } from 'react-icons/fa'
 
 const EmployeeDashboard = () => {
-  const { user } = useAuth()
+  const { user, userProfile } = useAuth()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [uploadModal, setUploadModal] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  // Updated state to match your database schema
   const [newDocument, setNewDocument] = useState({
     title: '',
     description: '',
     category: '',
-    expirationDate: '',
-    expirationDateValue: '',
     department: '',
     file: null
   })
@@ -29,7 +31,7 @@ const EmployeeDashboard = () => {
       const { data, error } = await supabase
         .from('documents')
         .select('*')
-        .eq('employee_id', user.id)
+        .eq('uploaded_by', user.id) // Changed from employee_id to uploaded_by
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -41,178 +43,111 @@ const EmployeeDashboard = () => {
     }
   }
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      // Validate file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
+        'text/plain',
+        'image/png',
+        'image/jpeg',
+        'image/jpg'
+      ]
+
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please select a valid file type (PDF, DOCX, DOC, TXT, PNG, JPG)')
+        e.target.value = ''
+        return
+      }
+
+      // Validate file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB')
+        e.target.value = ''
+        return
+      }
+
+      setNewDocument(prev => ({ ...prev, file }))
+    }
+  }
+
   const handleFileUpload = async (e) => {
     e.preventDefault()
     
     // Validate required fields
-    if (!newDocument.file) {
-      alert('Please select a file to upload.')
-      return
-    }
-    if (!newDocument.title) {
-      alert('Please enter a document title.')
-      return
-    }
-    if (!newDocument.category) {
-      alert('Please select a document category.')
-      return
-    }
-    if (!newDocument.department) {
-      alert('Please enter the department.')
-      return
-    }
-    
-    // Validate expiration date if "Set Expiration Date" is selected
-    if (newDocument.expirationDate === 'date' && !newDocument.expirationDateValue) {
-      alert('Please select an expiration date.')
+    if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
+      setError('Please fill in all required fields')
       return
     }
 
     try {
       setUploading(true)
-      console.log('Starting document upload...')
-      
-      // First, try to create the document record without file upload
-      // This helps us identify if the issue is with storage or database
-      const documentData = {
-        employee_id: user.id,
-        title: newDocument.title,
-        description: newDocument.description || '',
-        category: newDocument.category,
-        department: newDocument.department,
-        file_name: newDocument.file.name,
-        file_size: newDocument.file.size,
-        mime_type: newDocument.file.type,
-        status: 'pending'
-      }
+      setError('')
 
-      // Add expiration date if provided
-      if (newDocument.expirationDate === 'date' && newDocument.expirationDateValue) {
-        documentData.expiry_date = newDocument.expirationDateValue
-      }
-
-      console.log('Document data to insert:', documentData)
-      
-      // Try to upload file to storage first - with multiple fallback attempts
+      // Upload file to Supabase Storage
       const fileExt = newDocument.file.name.split('.').pop()
-      const fileName = `${user.id}/${Date.now()}.${fileExt}`
-      
-      console.log('Uploading file to storage:', fileName)
-      
-      let uploadData = null
-      let uploadError = null
-      
-      // First attempt: Try 'documents' bucket
-      const uploadResult = await supabase.storage
-        .from('documents')
-        .upload(fileName, newDocument.file, {
-          cacheControl: '3600',
-          upsert: false
-        })
-      
-      uploadData = uploadResult.data
-      uploadError = uploadResult.error
-      
-      // If documents bucket fails, try creating a public bucket as fallback
-      if (uploadError && (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('bucket'))) {
-        console.log('Documents bucket not found, trying to create one or use alternative...')
-        
-        // Try to create a public documents bucket as fallback
-        const { data: bucketData, error: bucketError } = await supabase.storage.createBucket('documents', {
-          public: false,
-          fileSizeLimit: 10485760 // 10MB
-        })
-        
-        if (!bucketError) {
-          console.log('Successfully created documents bucket, retrying upload...')
-          const retryResult = await supabase.storage
-            .from('documents')
-            .upload(fileName, newDocument.file, {
-              cacheControl: '3600',
-              upsert: false
-            })
-          uploadData = retryResult.data
-          uploadError = retryResult.error
-        }
-      }
-      
-      // If still failing, try without the folder structure
-      if (uploadError) {
-        console.log('Retrying upload without folder structure...')
-        const simpleFileName = `${Date.now()}.${fileExt}`
-        const simpleResult = await supabase.storage
-          .from('documents')
-          .upload(simpleFileName, newDocument.file, {
-            cacheControl: '3600',
-            upsert: false
-          })
-        uploadData = simpleResult.data
-        uploadError = simpleResult.error
-      }
+      const fileName = `user-uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
-      // Final fallback: Store document metadata without file if storage completely fails
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, newDocument.file)
+
       if (uploadError) {
         console.error('Storage upload error:', uploadError)
-        
-        // Ask user if they want to proceed without file storage
-        const proceedWithoutStorage = confirm(
-          'File storage is not available. Would you like to save the document information without the file? You can upload the file later when storage is available.'
-        )
-        
-        if (proceedWithoutStorage) {
-          console.log('Proceeding without file storage...')
-          documentData.file_url = null
-          documentData.storage_error = uploadError.message
-        } else {
-          throw new Error(`File upload failed: ${uploadError.message}`)
-        }
-      } else {
-        // Add file URL to document data on successful upload
-        documentData.file_url = uploadData.path
+        throw uploadError
       }
 
-      console.log('File upload process completed:', uploadData ? 'Success' : 'Stored without file')
+      console.log('File uploaded to:', fileName)
 
-      // Insert document record
-      const { data: insertData, error: insertError } = await supabase
+      // Save document metadata to database with updated schema
+      const { error: dbError } = await supabase
         .from('documents')
-        .insert(documentData)
-        .select()
+        .insert({
+          filename: newDocument.file.name,
+          file_path: fileName, // Changed from file_url to file_path
+          file_size: newDocument.file.size,
+          file_type: newDocument.file.type,
+          title: newDocument.title.trim(),
+          category: newDocument.category,
+          department: newDocument.department,
+          description: newDocument.description.trim() || null,
+          document_type: 'general',
+          upload_department: userProfile?.department,
+          uploaded_by: user.id, // Changed from employee_id to uploaded_by
+          status: 'pending'
+        })
 
-      if (insertError) {
-        console.error('Database insert error:', insertError)
-        
-        // Clean up uploaded file if database insert fails
-        if (uploadData?.path) {
-          await supabase.storage
-            .from('documents')
-            .remove([uploadData.path])
-        }
-          
-        throw new Error(`Database error: ${insertError.message}`)
+      if (dbError) {
+        console.error('Database insert error:', dbError)
+        throw dbError
       }
 
-      console.log('Document inserted successfully:', insertData)
-      
-      // Success!
-      alert('Document uploaded successfully!')
-      setUploadModal(false)
-      setNewDocument({ 
-        title: '', 
-        description: '', 
-        category: '', 
-        expirationDate: '', 
-        expirationDateValue: '', 
-        department: '', 
-        file: null 
+      // Reset form and close modal
+      setNewDocument({
+        title: '',
+        description: '',
+        category: '',
+        department: '',
+        file: null
       })
-      
+      setUploadModal(false)
+
+      // Clear file input
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) fileInput.value = ''
+
       // Refresh documents list
       await fetchDocuments()
-      
+      setSuccess('Document uploaded successfully!')
+      setTimeout(() => setSuccess(''), 3000)
+
     } catch (error) {
       console.error('Error uploading document:', error)
-      alert(`Error uploading document: ${error.message}`)
+      setError('Error uploading document: ' + error.message)
+      setTimeout(() => setError(''), 5000)
     } finally {
       setUploading(false)
     }
@@ -223,7 +158,7 @@ const EmployeeDashboard = () => {
       // Create signed URL for viewing (1 hour access)
       const { data, error } = await supabase.storage
         .from('documents')
-        .createSignedUrl(doc.file_url, 3600)
+        .createSignedUrl(doc.file_path, 3600) // Changed from file_url to file_path
 
       if (error) {
         console.error('Error creating signed URL:', error)
@@ -232,7 +167,6 @@ const EmployeeDashboard = () => {
       }
 
       if (data.signedUrl) {
-        // Open document in new tab
         window.open(data.signedUrl, '_blank')
       } else {
         alert('Unable to generate access URL for this document')
@@ -245,15 +179,17 @@ const EmployeeDashboard = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'approved': return 'text-green-600 bg-green-100'
-      case 'rejected': return 'text-red-600 bg-red-100'
-      default: return 'text-yellow-600 bg-yellow-100'
+      case 'approved':
+        return 'text-green-600 bg-green-100'
+      case 'rejected':
+        return 'text-red-600 bg-red-100'
+      default:
+        return 'text-yellow-600 bg-yellow-100'
     }
   }
 
   const handleDeleteDocument = async (doc) => {
-    const documentName = doc.title || doc.file_name || 'this document'
-    
+    const documentName = doc.title || doc.filename || 'this document'
     if (!window.confirm(`Are you sure you want to delete "${documentName}"? This action cannot be undone.`)) {
       return
     }
@@ -266,7 +202,7 @@ const EmployeeDashboard = () => {
         .from('documents')
         .delete()
         .eq('id', doc.id)
-        .eq('employee_id', user.id) // Ensure user can only delete their own documents
+        .eq('uploaded_by', user.id) // Changed from employee_id to uploaded_by
 
       if (dbError) {
         console.error('Database deletion error:', dbError)
@@ -274,11 +210,11 @@ const EmployeeDashboard = () => {
       }
 
       // Delete from storage if file exists
-      if (doc.file_url) {
+      if (doc.file_path) { // Changed from file_url to file_path
         const { error: storageError } = await supabase.storage
           .from('documents')
-          .remove([doc.file_url])
-        
+          .remove([doc.file_path])
+
         if (storageError) {
           console.warn('Storage deletion warning:', storageError)
         }
@@ -286,247 +222,376 @@ const EmployeeDashboard = () => {
 
       // Refresh documents list
       await fetchDocuments()
-      alert('Document deleted successfully!')
+      setSuccess('Document deleted successfully!')
+      setTimeout(() => setSuccess(''), 3000)
 
     } catch (error) {
       console.error('Error deleting document:', error)
-      alert('Error deleting document: ' + error.message)
+      setError('Error deleting document: ' + error.message)
+      setTimeout(() => setError(''), 5000)
     } finally {
       setDeleting(false)
     }
   }
 
+  const closeUploadModal = () => {
+    setUploadModal(false)
+    setNewDocument({
+      title: '',
+      description: '',
+      category: '',
+      department: '',
+      file: null
+    })
+    setError('')
+    // Clear file input
+    const fileInput = document.querySelector('input[type="file"]')
+    if (fileInput) fileInput.value = ''
+  }
+
   if (loading && documents.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your documents...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">My Documents</h1>
-        <button
-          onClick={() => setUploadModal(true)}
-          className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
-        >
-          Upload Document
-        </button>
-      </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                My Documents
+              </h1>
+              <p className="text-gray-600">
+                Upload and manage your personal documents
+              </p>
+            </div>
+            <button
+              onClick={() => setUploadModal(true)}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <FaUpload className="mr-2" />
+              Upload Document
+            </button>
+          </div>
+        </div>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 justify-center">
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <div className="flex flex-col items-center">
-            <FaFileAlt className="text-3xl mb-3 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-700">Total Documents</h3>
-            <p className="text-3xl font-bold text-primary-600">{documents.length}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <div className="flex flex-col items-center">
-            <FaClock className="text-3xl mb-3 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-gray-700">Pending Review</h3>
-            <p className="text-3xl font-bold text-yellow-600">
-              {documents.filter(d => d.status === 'pending').length}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <div className="flex flex-col items-center">
-            <FaCheckCircle className="text-3xl mb-3 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-700">Approved</h3>
-            <p className="text-3xl font-bold text-green-600">
-              {documents.filter(d => d.status === 'approved').length}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow text-center">
-          <div className="flex flex-col items-center">
-            <FaTimesCircle className="text-3xl mb-3 text-red-600" />
-            <h3 className="text-lg font-semibold text-gray-700">Rejected</h3>
-            <p className="text-3xl font-bold text-red-600">
-              {documents.filter(d => d.status === 'rejected').length}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Documents Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Document
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Uploaded
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {documents.map((doc) => (
-              <tr key={doc.id}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{doc.title}</div>
-                    <div className="text-sm text-gray-500">{doc.description}</div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {doc.category}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
-                    {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(doc.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex space-x-2">
-                    {/* View Document Button */}
-                    <button
-                      onClick={() => viewDocument(doc)}
-                      className="text-blue-600 hover:text-blue-900 p-1 rounded transition-colors duration-200"
-                      title="View Document"
-                    >
-                      <FaEye className="h-4 w-4" />
-                    </button>
-
-                    {/* Delete Document Button */}
-                    <button
-                      onClick={() => handleDeleteDocument(doc)}
-                      disabled={deleting}
-                      className="text-red-600 hover:text-red-900 p-1 rounded disabled:opacity-50 transition-colors duration-200"
-                      title="Delete Document"
-                    >
-                      <FaTrash className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        {documents.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">No documents uploaded yet.</p>
+        {/* Success/Error Messages */}
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-600 text-sm">{success}</p>
           </div>
         )}
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-600 text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <FaFileAlt className="text-blue-600 text-2xl mr-3" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Total Documents</p>
+                <p className="text-2xl font-bold text-gray-900">{documents.length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <FaClock className="text-yellow-600 text-2xl mr-3" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {documents.filter(d => d.status === 'pending').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <FaCheckCircle className="text-green-600 text-2xl mr-3" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Approved</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {documents.filter(d => d.status === 'approved').length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex items-center">
+              <FaTimesCircle className="text-red-600 text-2xl mr-3" />
+              <div>
+                <p className="text-sm font-medium text-gray-600">Rejected</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {documents.filter(d => d.status === 'rejected').length}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Documents Table */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Document
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Category
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Uploaded
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {documents.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {doc.title}
+                        </div>
+                        <div className="text-sm text-gray-500">{doc.description}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                        {doc.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {doc.department}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(doc.status)}`}>
+                        {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(doc.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-3">
+                        {doc.file_path && (
+                          <button
+                            onClick={() => viewDocument(doc)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="View Document"
+                          >
+                            <FaEye />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteDocument(doc)}
+                          disabled={deleting}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          title="Delete Document"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {documents.length === 0 && (
+            <div className="text-center py-12">
+              <FaFileAlt className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No documents uploaded yet</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Get started by uploading your first document.
+              </p>
+              <div className="mt-6">
+                <button
+                  onClick={() => setUploadModal(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <FaUpload className="mr-2" />
+                  Upload Document
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Upload Modal */}
+      {/* Upload Modal - THIS WAS MISSING! */}
       {uploadModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Upload Document</h3>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Upload Document</h3>
+              <button
+                onClick={closeUploadModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+            
             <form onSubmit={handleFileUpload}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={newDocument.title}
-                  onChange={(e) => setNewDocument({...newDocument, title: e.target.value})}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Category <span className="text-red-500">*</span></label>
-                <select
-                  required
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={newDocument.category}
-                  onChange={(e) => setNewDocument({...newDocument, category: e.target.value})}
-                >
-                  <option value="">Select Category</option>
-                  {DOCUMENT_CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Department <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={newDocument.department}
-                  onChange={(e) => setNewDocument({...newDocument, department: e.target.value})}
-                  placeholder="e.g. IT, HR, Finance"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Expiration Date</label>
-                <select
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={newDocument.expirationDate}
-                  onChange={(e) => setNewDocument({...newDocument, expirationDate: e.target.value, expirationDateValue: e.target.value === 'NA' ? 'NA' : ''})}
-                >
-                  <option value="">Select Expiration Type</option>
-                  <option value="NA">NA (No Expiration)</option>
-                  <option value="date">Set Expiration Date</option>
-                </select>
-              </div>
-              {newDocument.expirationDate === 'date' && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700">Select Date <span className="text-red-500">*</span></label>
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                    Title *
+                  </label>
                   <input
-                    type="date"
+                    id="title"
+                    type="text"
                     required
-                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                    value={newDocument.expirationDateValue}
-                    onChange={(e) => setNewDocument({...newDocument, expirationDateValue: e.target.value})}
+                    value={newDocument.title}
+                    onChange={(e) => setNewDocument(prev => ({ ...prev, title: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter document title"
                   />
                 </div>
+
+                {/* Category Dropdown */}
+                <div>
+                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                    Category *
+                  </label>
+                  <select
+                    id="category"
+                    required
+                    value={newDocument.category}
+                    onChange={(e) => setNewDocument(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Category</option>
+                    <option value="Medical">Medical</option>
+                    <option value="Contract">Contract</option>
+                    <option value="Training">Training</option>
+                    <option value="Safety">Safety</option>
+                    <option value="HR">HR</option>
+                    <option value="Insurance">Insurance</option>
+                    <option value="Background Check">Background Check</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                {/* Department Dropdown */}
+                <div>
+                  <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+                    Department *
+                  </label>
+                  <select
+                    id="department"
+                    required
+                    value={newDocument.department}
+                    onChange={(e) => setNewDocument(prev => ({ ...prev, department: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Department</option>
+                    <option value="systems">Systems</option>
+                    <option value="human_resources">Human Resources</option>
+                    <option value="finance_accounts">Finance & Accounts</option>
+                    <option value="legal">Legal</option>
+                    <option value="administration">Administration</option>
+                    <option value="mining_operations">Mining & Operations</option>
+                    <option value="marketing_sales">Marketing & Sales</option>
+                    <option value="medical">Medical</option>
+                    <option value="security">Security</option>
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    id="description"
+                    rows={3}
+                    value={newDocument.description}
+                    onChange={(e) => setNewDocument(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter document description (optional)"
+                  />
+                </div>
+
+                {/* File Upload */}
+                <div>
+                  <label htmlFor="file" className="block text-sm font-medium text-gray-700 mb-1">
+                    Document File *
+                  </label>
+                  <input
+                    id="file"
+                    type="file"
+                    required
+                    onChange={handleFileChange}
+                    accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Supported formats: PDF, DOCX, DOC, TXT, PNG, JPG (Max: 10MB)
+                  </p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">{error}</p>
+                </div>
               )}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea
-                  className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"
-                  rows={3}
-                  value={newDocument.description}
-                  onChange={(e) => setNewDocument({...newDocument, description: e.target.value})}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">File <span className="text-red-500">*</span></label>
-                <input
-                  type="file"
-                  required
-                  className="mt-1 block w-full"
-                  onChange={(e) => setNewDocument({...newDocument, file: e.target.files[0]})}
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
+
+              <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setUploadModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                  onClick={closeUploadModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
                 >
-                  {uploading ? 'Uploading...' : 'Upload'}
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <FaFileUpload className="mr-2" />
+                      Upload Document
+                    </>
+                  )}
                 </button>
               </div>
             </form>
