@@ -478,157 +478,127 @@ const EmployeeDashboard = () => {
         </div>
       </div>
 
-      {/* Upload Modal - THIS WAS MISSING! */}
       {uploadModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Upload Document</h3>
-              <button
-                onClick={closeUploadModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FaTimes size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleFileUpload}>
-              <div className="space-y-4">
-                {/* Title */}
-                <div>
-                  <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
-                  </label>
-                  <input
-                    id="title"
-                    type="text"
-                    required
-                    value={newDocument.title}
-                    onChange={(e) => setNewDocument(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter document title"
-                  />
-                </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-lg w-full max-w-lg max-h-[90vh] overflow-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold">Upload Document</h3>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={closeModal}
+          className="text-gray-600 hover:text-gray-900"
+        >
+          <FaTimes size={24} />
+        </button>
+      </div>
 
-                {/* Category Dropdown */}
-                <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
-                  </label>
-                  <select
-                    id="category"
-                    required
-                    value={newDocument.category}
-                    onChange={(e) => setNewDocument(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Category</option>
-                    <option value="Medical">Medical</option>
-                    <option value="Contract">Contract</option>
-                    <option value="Training">Training</option>
-                    <option value="Safety">Safety</option>
-                    <option value="HR">HR</option>
-                    <option value="Insurance">Insurance</option>
-                    <option value="Background Check">Background Check</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
+      <form onSubmit={handleFileUpload}>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+          Title <span className="text-red-600">*</span>
+        </label>
+        <input
+          id="title"
+          name="title"
+          type="text"
+          value={newDocument.title}
+          onChange={e => setNewDocument(prev => ({ ...prev, title: e.target.value }))}
+          required
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Enter document title"
+        />
 
-                {/* Department Dropdown */}
-                <div>
-                  <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
-                    Department *
-                  </label>
-                  <select
-                    id="department"
-                    required
-                    value={newDocument.department}
-                    onChange={(e) => setNewDocument(prev => ({ ...prev, department: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select Department</option>
-                    <option value="systems">Systems</option>
-                    <option value="human_resources">Human Resources</option>
-                    <option value="finance_accounts">Finance & Accounts</option>
-                    <option value="legal">Legal</option>
-                    <option value="administration">Administration</option>
-                    <option value="mining_operations">Mining & Operations</option>
-                    <option value="marketing_sales">Marketing & Sales</option>
-                    <option value="medical">Medical</option>
-                    <option value="security">Security</option>
-                  </select>
-                </div>
+        <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+          Category <span className="text-red-600">*</span>
+        </label>
+        <select
+          id="category"
+          name="category"
+          value={newDocument.category}
+          onChange={e => setNewDocument(prev => ({ ...prev, category: e.target.value }))}
+          required
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+        >
+          <option value="" disabled>Select category</option>
+          {["Medical", "Contract", "Training", "Safety", "HR", "Insurance", "Background Check", "Other"].map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
 
-                {/* Description */}
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    id="description"
-                    rows={3}
-                    value={newDocument.description}
-                    onChange={(e) => setNewDocument(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter document description (optional)"
-                  />
-                </div>
+        <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+          Department <span className="text-red-600">*</span>
+        </label>
+        <select
+          id="department"
+          name="department"
+          value={newDocument.department}
+          onChange={e => setNewDocument(prev => ({ ...prev, department: e.target.value }))}
+          required
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+        >
+          <option value="" disabled>Select department</option>
+          {["systems", "human_resources", "finance_accounts", "legal", "administration", "mining_operations", "marketing_sales", "medical", "security"].map(dep => (
+            <option key={dep} value={dep}>{dep.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+          ))}
+        </select>
 
-                {/* File Upload */}
-                <div>
-                  <label htmlFor="file" className="block text-sm font-medium text-gray-700 mb-1">
-                    Document File *
-                  </label>
-                  <input
-                    id="file"
-                    type="file"
-                    required
-                    onChange={handleFileChange}
-                    accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Supported formats: PDF, DOCX, DOC, TXT, PNG, JPG (Max: 10MB)
-                  </p>
-                </div>
-              </div>
+        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <textarea
+          id="description"
+          name="description"
+          rows={3}
+          value={newDocument.description}
+          onChange={e => setNewDocument(prev => ({ ...prev, description: e.target.value }))}
+          className="mb-4 block w-full rounded-md border border-gray-300 px-3 py-2 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+          placeholder="Optional description"
+        />
 
-              {error && (
-                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-red-600 text-sm">{error}</p>
-                </div>
-              )}
+        <label htmlFor="file" className="block text-sm font-medium text-gray-700 mb-1">
+          Document file <span className="text-red-600">*</span>
+        </label>
+        <input
+          id="file"
+          name="file"
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+          required
+          onChange={handleFileChange}
+          className="mb-4 block w-full cursor-pointer rounded-md border border-gray-300 text-gray-700 focus:border-blue-500 focus:ring-blue-500"
+        />
+        <p className="text-xs text-gray-500 mb-4">Supported formats: PDF, DOC, DOCX, TXT, PNG, JPG. Max size 10MB.</p>
 
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={closeUploadModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
-                >
-                  {uploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <FaFileUpload className="mr-2" />
-                      Upload Document
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
+        {error && (
+          <p className="mb-4 text-sm text-red-600">{error}</p>
+        )}
+
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={closeModal}
+            className="rounded border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-100"
+            disabled={uploading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={uploading}
+            className={`inline-flex items-center rounded bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {uploading && (
+              <svg className="mr-2 h-5 w-5 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 018 8h-4l3 3-3 3h-4z" />
+              </svg>
+            )}
+            <FaFileUpload className="mr-1" />
+            {uploading ? "Uploading..." : "Upload"}
+          </button>
         </div>
-      )}
+      </form>
+    </div>
+  </div>
+)}
     </div>
   )
 }
