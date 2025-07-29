@@ -9,9 +9,20 @@ const Navigation = () => {
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
+    const handleSignOut = async () => {
+    try {
+      const { error } = await signOut()
+      
+      if (error) {
+        console.error('Sign out error:', error)
+        alert('Error signing out: ' + error.message)
+      } else {
+        console.log('Sign out successful, redirecting...')
+        navigate('/login') // Add this redirect
+      }
+    } catch (err) {
+      console.error('Unexpected sign out error:', err)
+    }
   };
 
   const isActive = (path) => location.pathname === path;
