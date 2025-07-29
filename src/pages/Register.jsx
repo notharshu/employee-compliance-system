@@ -48,86 +48,89 @@ const Register = () => {
   ]
 
   const handleSubmit = async (e) => {
-  e.preventDefault()
-  setLoading(true)
-  setError('')
-  setSuccess('')
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
 
-  if (password !== confirmPassword) {
-    setError('Passwords do not match')
-    setLoading(false)
-    return
-  }
-
-  if (password.length < 6) {
-    setError('Password must be at least 6 characters long')
-    setLoading(false)
-    return
-  }
-
-  if (!firstName || !lastName || !department || !designation) {
-    setError('Please fill in all required fields')
-    setLoading(false)
-    return
-  }
-
-  try {
-    console.log('Starting signup process...')
-    
-    // Create user account
-    const { data, error } = await signUp(email, password)
-    
-    if (error) {
-      console.error('Signup error:', error)
-      setError(error.message)
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
       setLoading(false)
       return
     }
 
-    if (data.user) {
-      console.log('User created successfully:', data.user.id)
-      
-      // Wait a moment for user creation to complete
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Create profile directly
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email,
-            first_name: firstName,
-            last_name: lastName,
-            phone_number: phoneNumber || null,
-            department: department,
-            designation: designation,
-            role: 'employee',
-            profile_completed: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }
-        ])
-
-      if (profileError) {
-        console.error('Profile creation error:', profileError)
-        setError('Account created but profile setup failed. You can complete your profile after logging in.')
-      } else {
-        console.log('Profile created successfully')
-        setSuccess('Account created successfully! You can now log in to your account.')
-      }
-      
-      setTimeout(() => {
-        navigate('/login')
-      }, 3000)
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      setLoading(false)
+      return
     }
-  } catch (err) {
-    console.error('Unexpected error:', err)
-    setError(`An unexpected error occurred: ${err.message}`)
+
+    // Validation for required fields
+    if (!firstName || !lastName || !department || !designation) {
+      setError('Please fill in all required fields')
+      setLoading(false)
+      return
+    }
+
+    try {
+      console.log('Starting signup process...')
+      
+      // Create user account first
+      const { data, error } = await signUp(email, password)
+      
+      if (error) {
+        console.error('Signup error:', error)
+        setError(error.message)
+        setLoading(false)
+        return
+      }
+
+      if (data.user) {
+        console.log('User created successfully:', data.user.id)
+        
+        // Wait for user creation to complete
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Create profile directly (since trigger might not be working)
+        const profileData = {
+          id: data.user.id,
+          email: data.user.email,
+          first_name: firstName,
+          last_name: lastName,
+          phone_number: phoneNumber || null,
+          department: department,
+          designation: designation,
+          profile_completed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+        
+        console.log('Attempting to create profile with data:', profileData)
+        
+        const { data: profileResult, error: profileError } = await supabase
+          .from('profiles')
+          .insert([profileData])
+          .select()
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError)
+          setError('Account created but profile setup failed. You can complete your profile after logging in.')
+        } else {
+          console.log('Profile created successfully:', profileResult)
+          setSuccess('Account created successfully! You can now log in to your account.')
+        }
+        
+        setTimeout(() => {
+          navigate('/login')
+        }, 3000)
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      setError(`An unexpected error occurred: ${err.message}`)
+    }
+    
+    setLoading(false)
   }
-  
-  setLoading(false)
-}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
