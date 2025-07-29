@@ -23,15 +23,17 @@ const EmployeeDashboard = () => {
   })
 
   useEffect(() => {
-    fetchDocuments()
-  }, [])
+    if (user?.id) {
+      fetchDocuments()
+    }
+  }, [user])
 
   const fetchDocuments = async () => {
     try {
       const { data, error } = await supabase
         .from('documents')
         .select('*')
-        .eq('uploaded_by', user.id) // Changed from employee_id to uploaded_by
+        .eq('uploaded_by', user.id)
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -75,157 +77,116 @@ const EmployeeDashboard = () => {
   }
 
   const handleFileUpload = async (e) => {
-  e.preventDefault()
-  
-  // Check if session is valid before making API calls
-  if (!isSessionValid()) {
-    console.log('Session invalid, attempting to refresh...')
-    const { error: refreshError } = await refreshSession()
+    console.log('=== UPLOAD FUNCTION STARTED ===')
+    e.preventDefault()
     
-    if (refreshError) {
-      setError('Session expired. Please login again.')
-      return
-    }
-  }
-  
-  // DEBUG: Check what user ID the app is using
-  console.log('=== APP USER DEBUG ===')
-  console.log('user object:', user)
-  console.log('user.id from app:', user?.id)
-  console.log('userProfile.id:', userProfile?.id)
-  console.log('Are they the same?', user?.id === userProfile?.id)
-  
-  // Verify this user exists in profiles table
-  if (user?.id) {
-    try {
-      const { data: profileVerify, error: verifyError } = await supabase
-        .from('profiles')
-        .select('id, email, first_name, last_name')
-        .eq('id', user.id)
-        .single()
+    // Check if session is valid before making API calls
+    if (!isSessionValid()) {
+      console.log('Session invalid, attempting to refresh...')
+      const { error: refreshError } = await refreshSession()
       
-      console.log('Profile verification result:', profileVerify)
-      console.log('Profile verification error:', verifyError)
-      
-      if (verifyError) {
-        setError(`Profile not found for user ID: ${user.id}`)
+      if (refreshError) {
+        setError('Session expired. Please login again.')
         return
       }
-    } catch (err) {
-      console.error('Profile verification failed:', err)
-      setError('Failed to verify user profile')
+    }
+
+    // Validate form fields
+    if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
+      console.log('Validation failed:', newDocument)
+      setError('Please fill in all required fields')
       return
     }
-  } else {
-    setError('User ID is missing - not properly authenticated')
-    return
-  }
-  
-  // Validate form fields
-  if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
-    setError('Please fill in all required fields')
-    return
-  }
 
-  try {
-    setUploading(true)
-    setError('')
-
-    // DEBUG: Test basic Supabase connection
-    console.log('Testing Supabase connection...')
-    const { data: testData, error: testError } = await supabase
-      .from('documents')
-      .select('count(*)')
-      .limit(1)
-
-    console.log('Connection test result:', testData, testError)
-
-    // Upload file to Storage first
-    const fileExt = newDocument.file.name.split('.').pop()
-    const fileName = `user-uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-
-    console.log('Uploading file to storage...')
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(fileName, newDocument.file)
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError)
-      throw uploadError
+    if (!user?.id) {
+      console.log('No user ID found')
+      setError('User not authenticated')
+      return
     }
 
-    console.log('File uploaded successfully to:', fileName)
+    try {
+      setUploading(true)
+      setError('')
+      console.log('Starting upload process...')
 
-    // Prepare insert data
-    const insertData = {
-      filename: newDocument.file.name,
-      file_path: fileName,
-      file_size: newDocument.file.size,
-      file_type: newDocument.file.type,
-      title: newDocument.title.trim(),
-      category: newDocument.category,
-      department: newDocument.department,
-      description: newDocument.description.trim() || null,
-      document_type: 'general',
-      upload_department: userProfile?.department,
-      uploaded_by: user.id,
-      status: 'pending'
+      // Upload file to Storage
+      const fileExt = newDocument.file.name.split('.').pop()
+      const fileName = `user-uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+
+      console.log('Uploading to storage:', fileName)
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, newDocument.file)
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError)
+        throw uploadError
+      }
+
+      console.log('File uploaded successfully')
+
+      // Insert to database
+      const insertData = {
+        filename: newDocument.file.name,
+        file_path: fileName,
+        file_size: newDocument.file.size,
+        file_type: newDocument.file.type,
+        title: newDocument.title.trim(),
+        category: newDocument.category,
+        department: newDocument.department,
+        description: newDocument.description.trim() || null,
+        document_type: 'general',
+        upload_department: userProfile?.department,
+        uploaded_by: user.id,
+        status: 'pending'
+      }
+
+      console.log('Inserting to database:', insertData)
+      const { data: dbData, error: dbError } = await supabase
+        .from('documents')
+        .insert(insertData)
+        .select()
+
+      if (dbError) {
+        console.error('Database error:', dbError)
+        throw dbError
+      }
+
+      console.log('Database insert successful')
+
+      // Success - clean up
+      setNewDocument({
+        title: '',
+        description: '',
+        category: '',
+        department: '',
+        file: null
+      })
+      setUploadModal(false)
+
+      // Clear file input
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) fileInput.value = ''
+
+      await fetchDocuments()
+      setSuccess('Document uploaded successfully!')
+      setTimeout(() => setSuccess(''), 3000)
+
+    } catch (error) {
+      console.error('Upload error:', error)
+      setError('Error uploading document: ' + error.message)
+      setTimeout(() => setError(''), 5000)
+    } finally {
+      setUploading(false)
     }
-
-    console.log('Attempting to insert data:', insertData)
-    console.log('User ID being used:', user.id)
-
-    // Insert to database
-    const { data: dbData, error: dbError } = await supabase
-      .from('documents')
-      .insert(insertData)
-      .select()
-
-    if (dbError) {
-      console.error('Database insert error:', dbError)
-      console.error('Error code:', dbError.code)
-      console.error('Error message:', dbError.message)
-      console.error('Error details:', dbError.details)
-      console.error('Error hint:', dbError.hint)
-      throw dbError
-    }
-
-    console.log('Database insert successful:', dbData)
-
-    // Clear file input
-    const fileInput = document.querySelector('input[type="file"]')
-    if (fileInput) fileInput.value = ''
-
-    // Reset form and close modal
-    setNewDocument({
-      title: '',
-      description: '',
-      category: '',
-      department: '',
-      file: null
-    })
-    setUploadModal(false)
-
-    // Refresh documents list
-    await fetchDocuments()
-    setSuccess('Document uploaded successfully!')
-    setTimeout(() => setSuccess(''), 3000)
-
-  } catch (error) {
-    console.error('Full error object:', error)
-    setError('Error uploading document: ' + error.message)
-    setTimeout(() => setError(''), 5000)
-  } finally {
-    setUploading(false)
   }
-}
 
   const viewDocument = async (doc) => {
     try {
       // Create signed URL for viewing (1 hour access)
       const { data, error } = await supabase.storage
         .from('documents')
-        .createSignedUrl(doc.file_path, 3600) // Changed from file_url to file_path
+        .createSignedUrl(doc.file_path, 3600)
 
       if (error) {
         console.error('Error creating signed URL:', error)
@@ -269,7 +230,7 @@ const EmployeeDashboard = () => {
         .from('documents')
         .delete()
         .eq('id', doc.id)
-        .eq('uploaded_by', user.id) // Changed from employee_id to uploaded_by
+        .eq('uploaded_by', user.id)
 
       if (dbError) {
         console.error('Database deletion error:', dbError)
@@ -277,7 +238,7 @@ const EmployeeDashboard = () => {
       }
 
       // Delete from storage if file exists
-      if (doc.file_path) { // Changed from file_url to file_path
+      if (doc.file_path) {
         const { error: storageError } = await supabase.storage
           .from('documents')
           .remove([doc.file_path])
@@ -342,7 +303,10 @@ const EmployeeDashboard = () => {
               </p>
             </div>
             <button
-              onClick={() => setUploadModal(true)}
+              onClick={() => {
+                console.log('Upload button clicked')
+                setUploadModal(true)
+              }}
               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <FaUpload className="mr-2" />

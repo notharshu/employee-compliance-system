@@ -66,7 +66,6 @@ export const AuthProvider = ({ children }) => {
         case 'TOKEN_REFRESHED':
           console.log('Token refreshed successfully')
           if (currentSession?.user) {
-            // Optionally refetch profile on token refresh
             await fetchUserProfile(currentSession.user.id)
           }
           break
@@ -112,7 +111,6 @@ export const AuthProvider = ({ children }) => {
 
       if (error) {
         console.error('Error fetching user profile:', error)
-        // Don't return early - we still want to set loading to false
       } else {
         console.log('User profile fetched successfully:', data?.email)
         setUserProfile(data)
