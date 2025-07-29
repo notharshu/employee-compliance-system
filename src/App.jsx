@@ -36,7 +36,7 @@ function App() {
             />
 
             <Route
-              path="/policies"
+              path="/company-policies"
               element={
                 <ProtectedRoute>
                   <Navigation />
