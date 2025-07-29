@@ -348,10 +348,10 @@ const GeneralManagerDashboard = () => {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            General Manager Dashboard - {userProfile.department}
+            Manage Documents
           </h1>
           <p className="text-gray-600">
-            Review and manage documents for your department
+            Review and manage documents
           </p>
         </div>
 

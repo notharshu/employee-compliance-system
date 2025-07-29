@@ -61,38 +61,38 @@ const Navigation = () => {
 
                 {/* General Manager Navigation */}
                 {isGeneralManager && (
-                  <div
-                    className="relative"
-                    onMouseEnter={() => setDropdownOpen(true)}
-                    onMouseLeave={() => setDropdownOpen(false)}
-                  >
-                    <Link
-                      to="/general-manager-dashboard"
-                      className={navLinkClass("/general-manager-dashboard")}
-                    >
-                      GM Dashboard
-                    </Link>
+  <div
+    className="relative"
+    onMouseEnter={() => setDropdownOpen(true)}
+    onMouseLeave={() => setDropdownOpen(false)}
+  >
+    <Link
+      to="/general-manager-dashboard"
+      className={navLinkClass("/general-manager-dashboard")}
+    >
+      Manage
+    </Link>
 
-                    {dropdownOpen && (
-                      <div className="absolute left-0 mt-1 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
-                        <div className="py-1">
-                          <Link
-                            to="/general-manager-dashboard"
-                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            GM Dashboard
-                          </Link>
-                          <Link
-                            to="/employees"
-                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                          >
-                            Employees
-                          </Link>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+    {dropdownOpen && (
+      <div className="absolute left-0 mt-1 w-48 bg-white rounded-md shadow-lg z-50 border border-gray-200">
+        <div className="py-1">
+          <Link
+            to="/general-manager-dashboard"
+            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Documents
+          </Link>
+          <Link
+            to="/employees"
+            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            Employees
+          </Link>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
                 {/* Employees link for Managers (not General Managers, as they have it in dropdown) */}
                 {canViewEmployees && !isGeneralManager && (
