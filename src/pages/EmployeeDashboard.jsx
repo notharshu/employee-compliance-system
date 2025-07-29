@@ -77,6 +77,39 @@ const EmployeeDashboard = () => {
   const handleFileUpload = async (e) => {
   e.preventDefault()
   
+  // DEBUG: Check what user ID the app is using
+  console.log('=== APP USER DEBUG ===')
+  console.log('user object:', user)
+  console.log('user.id from app:', user?.id)
+  console.log('userProfile.id:', userProfile?.id)
+  console.log('Are they the same?', user?.id === userProfile?.id)
+  
+  // Verify this user exists in profiles table
+  if (user?.id) {
+    try {
+      const { data: profileVerify, error: verifyError } = await supabase
+        .from('profiles')
+        .select('id, email, first_name, last_name')
+        .eq('id', user.id)
+        .single()
+      
+      console.log('Profile verification result:', profileVerify)
+      console.log('Profile verification error:', verifyError)
+      
+      if (verifyError) {
+        setError(`Profile not found for user ID: ${user.id}`)
+        return
+      }
+    } catch (err) {
+      console.error('Profile verification failed:', err)
+      setError('Failed to verify user profile')
+      return
+    }
+  } else {
+    setError('User ID is missing - not properly authenticated')
+    return
+  }
+  
   if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
     setError('Please fill in all required fields')
     return
