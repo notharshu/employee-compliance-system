@@ -37,9 +37,6 @@ const Navigation = () => {
           <div className="flex items-center">
             <Link to="/dashboard" className="flex-shrink-0 flex items-center">
               <img className="h-8 w-auto" src={CompanyLogo} alt="Company" />
-              <span className="ml-2 text-xl font-bold text-gray-800">
-                Employee System
-              </span>
             </Link>
           </div>
 
