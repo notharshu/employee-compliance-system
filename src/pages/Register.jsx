@@ -48,89 +48,120 @@ const Register = () => {
   ]
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  setSuccess('')
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
+  if (password !== confirmPassword) {
+    setError('Passwords do not match')
+    setLoading(false)
+    return
+  }
+
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters long')
+    setLoading(false)
+    return
+  }
+
+  // Validation for required fields
+  if (!firstName || !lastName || !department || !designation) {
+    setError('Please fill in all required fields')
+    setLoading(false)
+    return
+  }
+
+  try {
+    console.log('Starting signup process...')
+    
+    // Create user account first
+    const { data, error } = await signUp(email, password)
+    
+    if (error) {
+      console.error('Signup error:', error)
+      setError(error.message)
       setLoading(false)
       return
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long')
-      setLoading(false)
-      return
-    }
-
-    // Validation for required fields
-    if (!firstName || !lastName || !department || !designation) {
-      setError('Please fill in all required fields')
-      setLoading(false)
-      return
-    }
-
-    try {
-      console.log('Starting signup process...')
+    if (data.user) {
+      console.log('User created successfully:', data.user.id)
       
-      // Create user account first
-      const { data, error } = await signUp(email, password)
-      
-      if (error) {
-        console.error('Signup error:', error)
-        setError(error.message)
-        setLoading(false)
-        return
+      // Since email confirmation is disabled, user is immediately available
+      // Try to create profile with retry logic
+      let profileCreated = false
+      let attempts = 0
+      const maxAttempts = 5
+
+      while (!profileCreated && attempts < maxAttempts) {
+        attempts++
+        console.log(`Profile creation attempt ${attempts}...`)
+
+        try {
+          const profileData = {
+            id: data.user.id,
+            email: data.user.email,
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phoneNumber || null,
+            department: department,
+            designation: designation,
+            profile_completed: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+          
+          console.log('Attempting to create profile with data:', profileData)
+          
+          const { data: profileResult, error: profileError } = await supabase
+            .from('profiles')
+            .insert([profileData])
+            .select()
+
+          if (profileError) {
+            console.error(`Profile creation attempt ${attempts} failed:`, profileError)
+            console.error('Error code:', profileError.code)
+            console.error('Error details:', profileError.details)
+            console.error('Error hint:', profileError.hint)
+            
+            if (attempts === maxAttempts) {
+              throw profileError
+            }
+            // Wait longer between retries
+            await new Promise(resolve => setTimeout(resolve, 3000))
+          } else {
+            console.log('Profile created successfully:', profileResult)
+            profileCreated = true
+          }
+        } catch (retryError) {
+          console.error(`Profile creation attempt ${attempts} error:`, retryError)
+          if (attempts === maxAttempts) {
+            throw retryError
+          }
+          await new Promise(resolve => setTimeout(resolve, 3000))
+        }
       }
 
-      if (data.user) {
-        console.log('User created successfully:', data.user.id)
-        
-        // Wait for user creation to complete
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        // Create profile directly (since trigger might not be working)
-        const profileData = {
-          id: data.user.id,
-          email: data.user.email,
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phoneNumber || null,
-          department: department,
-          designation: designation,
-          profile_completed: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-        
-        console.log('Attempting to create profile with data:', profileData)
-        
-        const { data: profileResult, error: profileError } = await supabase
-          .from('profiles')
-          .insert([profileData])
-          .select()
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-          setError('Account created but profile setup failed. You can complete your profile after logging in.')
-        } else {
-          console.log('Profile created successfully:', profileResult)
-          setSuccess('Account created successfully! You can now log in to your account.')
-        }
-        
+      if (profileCreated) {
+        setSuccess('Account created successfully! Redirecting to login...')
+        setTimeout(() => {
+          navigate('/login')
+        }, 2000)
+      } else {
+        setError('Account created but profile setup failed. Please try logging in - your profile will be created automatically on first login.')
         setTimeout(() => {
           navigate('/login')
         }, 3000)
       }
-    } catch (err) {
-      console.error('Unexpected error:', err)
-      setError(`An unexpected error occurred: ${err.message}`)
     }
-    
-    setLoading(false)
+  } catch (err) {
+    console.error('Unexpected error:', err)
+    setError(`Registration failed: ${err.message}`)
   }
+  
+  setLoading(false)
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

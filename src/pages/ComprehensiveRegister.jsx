@@ -94,101 +94,130 @@ const ComprehensiveRegister = () => {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  setSuccess('')
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
+  if (password !== confirmPassword) {
+    setError('Passwords do not match')
+    setLoading(false)
+    return
+  }
+
+  if (password.length < 6) {
+    setError('Password must be at least 6 characters long')
+    setLoading(false)
+    return
+  }
+
+  try {
+    console.log('Starting comprehensive signup process...')
+    
+    // Create user account first
+    const { data, error } = await signUp(email, password)
+    
+    if (error) {
+      console.error('Signup error:', error)
+      setError(error.message)
       setLoading(false)
       return
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long')
-      setLoading(false)
-      return
-    }
+    if (data.user) {
+      console.log('User created successfully:', data.user.id)
+      
+      // Try to create comprehensive profile with retry logic
+      let profileCreated = false
+      let attempts = 0
+      const maxAttempts = 5
 
-    try {
-      console.log('Starting comprehensive signup process...')
-      
-      // Create user account first
-      const { data, error } = await signUp(email, password)
-      
-      if (error) {
-        console.error('Signup error:', error)
-        setError(error.message)
-        setLoading(false)
-        return
+      while (!profileCreated && attempts < maxAttempts) {
+        attempts++
+        console.log(`Comprehensive profile creation attempt ${attempts}...`)
+
+        try {
+          const profileData = {
+            id: data.user.id,
+            email: data.user.email,
+            
+            // Personal Information
+            first_name: firstName,
+            middle_name: middleName || null,
+            last_name: lastName,
+            date_of_birth: dateOfBirth || null,
+            gender: gender || null,
+            blood_group: bloodGroup || null,
+            
+            // Contact Information
+            phone_number: phoneNumber || null,
+            emergency_contact_name: emergencyContactName || null,
+            emergency_contact_phone: emergencyContactPhone || null,
+            permanent_address: permanentAddress || null,
+            current_address: currentAddress || null,
+            
+            // Employment Information
+            department: department,
+            designation: designation,
+            date_of_joining: dateOfJoining || null,
+            reporting_manager: reportingManager || null,
+            work_location: workLocation || null,
+            shift_timing: shiftTiming || null,
+            
+            profile_completed: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+          
+          console.log('Creating comprehensive profile with data:', profileData)
+
+          const { data: profileResult, error: profileError } = await supabase
+            .from('profiles')
+            .insert([profileData])
+            .select()
+
+          if (profileError) {
+            console.error(`Comprehensive profile creation attempt ${attempts} failed:`, profileError)
+            console.error('Error code:', profileError.code)
+            console.error('Error details:', profileError.details)
+            console.error('Error hint:', profileError.hint)
+            
+            if (attempts === maxAttempts) {
+              throw profileError
+            }
+            await new Promise(resolve => setTimeout(resolve, 3000))
+          } else {
+            console.log('Comprehensive profile created successfully:', profileResult)
+            profileCreated = true
+          }
+        } catch (retryError) {
+          console.error(`Comprehensive profile creation attempt ${attempts} error:`, retryError)
+          if (attempts === maxAttempts) {
+            throw retryError
+          }
+          await new Promise(resolve => setTimeout(resolve, 3000))
+        }
       }
 
-      if (data.user) {
-        console.log('User created successfully:', data.user.id)
-        
-        // Wait for user creation to complete
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        // Create comprehensive profile directly
-        const profileData = {
-          id: data.user.id,
-          email: data.user.email,
-          
-          // Personal Information
-          first_name: firstName,
-          middle_name: middleName || null,
-          last_name: lastName,
-          date_of_birth: dateOfBirth || null,
-          gender: gender || null,
-          blood_group: bloodGroup || null,
-          
-          // Contact Information
-          phone_number: phoneNumber || null,
-          emergency_contact_name: emergencyContactName || null,
-          emergency_contact_phone: emergencyContactPhone || null,
-          permanent_address: permanentAddress || null,
-          current_address: currentAddress || null,
-          
-          // Employment Information
-          department: department,
-          designation: designation,
-          date_of_joining: dateOfJoining || null,
-          reporting_manager: reportingManager || null,
-          work_location: workLocation || null,
-          shift_timing: shiftTiming || null,
-          
-          profile_completed: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-        
-        console.log('Creating comprehensive profile with data:', profileData)
-
-        const { data: profileResult, error: profileError } = await supabase
-          .from('profiles')
-          .insert([profileData])
-          .select()
-
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-          setError('Account created but profile setup failed. You can complete your profile after logging in.')
-        } else {
-          console.log('Comprehensive profile created successfully:', profileResult)
-          setSuccess('Registration successful! You can now log in to your account.')
-        }
-        
+      if (profileCreated) {
+        setSuccess('Registration successful! Redirecting to login...')
+        setTimeout(() => {
+          navigate('/login')
+        }, 2000)
+      } else {
+        setError('Account created but profile setup failed. Please try logging in - your profile will be created automatically on first login.')
         setTimeout(() => {
           navigate('/login')
         }, 3000)
       }
-    } catch (err) {
-      console.error('Unexpected error:', err)
-      setError(`An unexpected error occurred: ${err.message}`)
     }
-    
-    setLoading(false)
+  } catch (err) {
+    console.error('Unexpected error:', err)
+    setError(`Registration failed: ${err.message}`)
   }
+  
+  setLoading(false)
+}
 
   const renderStepContent = () => {
     switch (step) {
