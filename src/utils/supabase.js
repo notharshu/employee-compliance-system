@@ -10,12 +10,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export const DOCUMENT_CATEGORIES = [
   'Medical',
   'Contract',
-  'Training', 
+  'Training',
   'Safety',
   'HR',
   'Insurance',
   'Background Check',
   'Other'
+]
+
+// Company policy categories
+export const POLICY_CATEGORIES = [
+  'compliance',
+  'hr',
+  'safety',
+  'finance',
+  'operations',
+  'legal',
+  'benefits',
+  'training'
 ]
 
 // Document status options
@@ -49,14 +61,92 @@ export const DESIGNATIONS = [
   { value: 'sr_officer', label: 'Sr. Officer' }
 ]
 
+// Storage bucket configurations
+export const STORAGE_BUCKETS = {
+  DOCUMENTS: 'documents',
+  PROFILE_PICTURES: 'profile-pictures'
+}
+
+// Storage folder paths
+export const STORAGE_PATHS = {
+  POLICIES: 'policies/',
+  USER_UPLOADS: 'user-uploads/',
+  PROFILE_PICTURES: 'profile-pictures/'
+}
+
+// File size limits (in bytes)
+export const FILE_SIZE_LIMITS = {
+  DOCUMENTS: 10485760, // 10MB
+  PROFILE_PICTURES: 5242880, // 5MB
+  POLICIES: 10485760 // 10MB
+}
+
+// Allowed file types
+export const ALLOWED_FILE_TYPES = {
+  DOCUMENTS: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp'
+  ],
+  PROFILE_PICTURES: [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp'
+  ],
+  POLICIES: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'image/jpeg',
+    'image/png'
+  ]
+}
+
 // Helper function to get department label by value
 export const getDepartmentLabel = (value) => {
   const dept = DEPARTMENTS.find(d => d.value === value)
   return dept ? dept.label : value
 }
 
-// Helper function to get designation label by value  
+// Helper function to get designation label by value
 export const getDesignationLabel = (value) => {
   const desig = DESIGNATIONS.find(d => d.value === value)
   return desig ? desig.label : value
+}
+
+// Helper function to validate file type
+export const validateFileType = (file, category = 'DOCUMENTS') => {
+  const allowedTypes = ALLOWED_FILE_TYPES[category]
+  return allowedTypes.includes(file.type)
+}
+
+// Helper function to validate file size
+export const validateFileSize = (file, category = 'DOCUMENTS') => {
+  const sizeLimit = FILE_SIZE_LIMITS[category]
+  return file.size <= sizeLimit
+}
+
+// Helper function to generate file path
+export const generateFilePath = (category, fileName, userId = null) => {
+  const timestamp = Date.now()
+  const randomId = Math.random().toString(36).substring(2)
+  
+  switch (category) {
+    case 'POLICIES':
+      return `${STORAGE_PATHS.POLICIES}${timestamp}-${randomId}-${fileName}`
+    case 'PROFILE_PICTURES':
+      return `${userId}/${timestamp}-profile-picture.${fileName.split('.').pop()}`
+    case 'DOCUMENTS':
+    default:
+      return `${STORAGE_PATHS.USER_UPLOADS}${timestamp}-${randomId}-${fileName}`
+  }
 }

@@ -41,9 +41,41 @@ export const setupStorageBuckets = async () => {
         return false
       } else {
         console.log('Documents bucket created successfully')
+        
+        // Create policies folder in documents bucket
+        try {
+          console.log('Creating policies folder...')
+          const { error: folderError } = await supabase.storage
+            .from('documents')
+            .upload('policies/.keep', new Blob([''], { type: 'text/plain' }))
+          
+          if (folderError && !folderError.message.includes('already exists')) {
+            console.warn('Could not create policies folder:', folderError)
+          } else {
+            console.log('Policies folder created successfully')
+          }
+        } catch (folderErr) {
+          console.warn('Policies folder creation warning:', folderErr)
+        }
       }
     } else {
       console.log('Documents bucket already exists')
+      
+      // Try to create policies folder even if bucket exists
+      try {
+        console.log('Ensuring policies folder exists...')
+        const { error: folderError } = await supabase.storage
+          .from('documents')
+          .upload('policies/.keep', new Blob([''], { type: 'text/plain' }))
+        
+        if (folderError && !folderError.message.includes('already exists')) {
+          console.warn('Could not create policies folder:', folderError)
+        } else {
+          console.log('Policies folder verified/created')
+        }
+      } catch (folderErr) {
+        console.warn('Policies folder check warning:', folderErr)
+      }
     }
 
     // Create profile-pictures bucket if it doesn't exist
@@ -99,6 +131,24 @@ export const testStorageUpload = async () => {
     } else {
       console.log('Storage test successful:', data)
       
+      // Test policies folder upload
+      const { data: policyData, error: policyError } = await supabase.storage
+        .from('documents')
+        .upload('policies/test-policy.txt', testFile, {
+          cacheControl: '3600',
+          upsert: true
+        })
+
+      if (policyError) {
+        console.warn('Policies folder test failed:', policyError)
+      } else {
+        console.log('Policies folder test successful:', policyData)
+        // Clean up policy test file
+        await supabase.storage
+          .from('documents')
+          .remove(['policies/test-policy.txt'])
+      }
+      
       // Clean up test file
       await supabase.storage
         .from('documents')
@@ -126,7 +176,7 @@ export const checkDatabaseSchema = async () => {
       file_size: 100,
       file_type: 'text/plain',
       title: 'Test Document',
-      description: 'Test description', 
+      description: 'Test description',
       document_type: 'policy',
       department: 'systems', // Must match your department constraint
       upload_department: 'systems',
@@ -177,6 +227,62 @@ export const checkDatabaseSchema = async () => {
     }
   } catch (error) {
     console.error('Error checking database schema:', error)
+    return false
+  }
+}
+
+/**
+ * Test company policies table
+ */
+export const checkPoliciesSchema = async () => {
+  try {
+    console.log('Checking company_policies table schema...')
+    
+    const testPolicyData = {
+      title: 'Test Policy',
+      description: 'Test policy description',
+      category: 'compliance',
+      file_url: 'policies/test-policy.pdf',
+      file_name: 'test-policy.pdf',
+      file_type: 'application/pdf',
+      file_size: 1000,
+      uploaded_by: '00000000-0000-0000-0000-000000000000' // Test UUID
+    }
+
+    const { data, error } = await supabase
+      .from('company_policies')
+      .insert(testPolicyData)
+      .select()
+
+    if (error) {
+      console.error('Policies schema check - Error details:', error)
+      
+      if (error.code === 'PGRST116') {
+        console.error('company_policies table does not exist!')
+        return false
+      }
+
+      if (error.code === '23505' || error.code === '23502' || error.code === '23503') {
+        console.log('Policies schema appears to be correct (constraint violation expected for test data)')
+        return true
+      }
+
+      return false
+    } else {
+      console.log('Policies schema check passed')
+      
+      // Clean up test record
+      if (data && data[0]) {
+        await supabase
+          .from('company_policies')
+          .delete()
+          .eq('id', data[0].id)
+      }
+      
+      return true
+    }
+  } catch (error) {
+    console.error('Error checking policies schema:', error)
     return false
   }
 }
