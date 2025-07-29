@@ -4,7 +4,7 @@ import { supabase, DOCUMENT_CATEGORIES, DOCUMENT_STATUS } from '../utils/supabas
 import { FaFileAlt, FaClock, FaCheckCircle, FaTimesCircle, FaEye, FaTrash, FaUpload, FaTimes, FaFileUpload } from 'react-icons/fa'
 
 const EmployeeDashboard = () => {
-  const { user, userProfile } = useAuth()
+  const { user, userProfile, isSessionValid, refreshSession } = useAuth()
   const [documents, setDocuments] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -77,6 +77,17 @@ const EmployeeDashboard = () => {
   const handleFileUpload = async (e) => {
   e.preventDefault()
   
+  // Check if session is valid before making API calls
+  if (!isSessionValid()) {
+    console.log('Session invalid, attempting to refresh...')
+    const { error: refreshError } = await refreshSession()
+    
+    if (refreshError) {
+      setError('Session expired. Please login again.')
+      return
+    }
+  }
+  
   // DEBUG: Check what user ID the app is using
   console.log('=== APP USER DEBUG ===')
   console.log('user object:', user)
@@ -110,6 +121,7 @@ const EmployeeDashboard = () => {
     return
   }
   
+  // Validate form fields
   if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
     setError('Please fill in all required fields')
     return
@@ -180,6 +192,10 @@ const EmployeeDashboard = () => {
 
     console.log('Database insert successful:', dbData)
 
+    // Clear file input
+    const fileInput = document.querySelector('input[type="file"]')
+    if (fileInput) fileInput.value = ''
+
     // Reset form and close modal
     setNewDocument({
       title: '',
@@ -203,7 +219,6 @@ const EmployeeDashboard = () => {
     setUploading(false)
   }
 }
-
 
   const viewDocument = async (doc) => {
     try {
