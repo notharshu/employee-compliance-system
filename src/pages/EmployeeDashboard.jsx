@@ -75,83 +75,102 @@ const EmployeeDashboard = () => {
   }
 
   const handleFileUpload = async (e) => {
-    e.preventDefault()
-    
-    // Validate required fields
-    if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
-      setError('Please fill in all required fields')
-      return
-    }
-
-    try {
-      setUploading(true)
-      setError('')
-
-      // Upload file to Supabase Storage
-      const fileExt = newDocument.file.name.split('.').pop()
-      const fileName = `user-uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, newDocument.file)
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError)
-        throw uploadError
-      }
-
-      console.log('File uploaded to:', fileName)
-
-      // Save document metadata to database with updated schema
-      const { error: dbError } = await supabase
-        .from('documents')
-        .insert({
-          filename: newDocument.file.name,
-          file_path: fileName, // Changed from file_url to file_path
-          file_size: newDocument.file.size,
-          file_type: newDocument.file.type,
-          title: newDocument.title.trim(),
-          category: newDocument.category,
-          department: newDocument.department,
-          description: newDocument.description.trim() || null,
-          document_type: 'general',
-          upload_department: userProfile?.department,
-          uploaded_by: user.id, // Changed from employee_id to uploaded_by
-          status: 'pending'
-        })
-
-      if (dbError) {
-        console.error('Database insert error:', dbError)
-        throw dbError
-      }
-
-      // Reset form and close modal
-      setNewDocument({
-        title: '',
-        description: '',
-        category: '',
-        department: '',
-        file: null
-      })
-      setUploadModal(false)
-
-      // Clear file input
-      const fileInput = document.querySelector('input[type="file"]')
-      if (fileInput) fileInput.value = ''
-
-      // Refresh documents list
-      await fetchDocuments()
-      setSuccess('Document uploaded successfully!')
-      setTimeout(() => setSuccess(''), 3000)
-
-    } catch (error) {
-      console.error('Error uploading document:', error)
-      setError('Error uploading document: ' + error.message)
-      setTimeout(() => setError(''), 5000)
-    } finally {
-      setUploading(false)
-    }
+  e.preventDefault()
+  
+  if (!newDocument.file || !newDocument.title.trim() || !newDocument.category || !newDocument.department) {
+    setError('Please fill in all required fields')
+    return
   }
+
+  try {
+    setUploading(true)
+    setError('')
+
+    // DEBUG: Test basic Supabase connection
+    console.log('Testing Supabase connection...')
+    const { data: testData, error: testError } = await supabase
+      .from('documents')
+      .select('count(*)')
+      .limit(1)
+
+    console.log('Connection test result:', testData, testError)
+
+    // Upload file to Storage first
+    const fileExt = newDocument.file.name.split('.').pop()
+    const fileName = `user-uploads/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+
+    console.log('Uploading file to storage...')
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(fileName, newDocument.file)
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError)
+      throw uploadError
+    }
+
+    console.log('File uploaded successfully to:', fileName)
+
+    // Prepare insert data
+    const insertData = {
+      filename: newDocument.file.name,
+      file_path: fileName,
+      file_size: newDocument.file.size,
+      file_type: newDocument.file.type,
+      title: newDocument.title.trim(),
+      category: newDocument.category,
+      department: newDocument.department,
+      description: newDocument.description.trim() || null,
+      document_type: 'general',
+      upload_department: userProfile?.department,
+      uploaded_by: user.id,
+      status: 'pending'
+    }
+
+    console.log('Attempting to insert data:', insertData)
+    console.log('User ID being used:', user.id)
+
+    // Insert to database
+    const { data: dbData, error: dbError } = await supabase
+      .from('documents')
+      .insert(insertData)
+      .select()
+
+    if (dbError) {
+      console.error('Database insert error:', dbError)
+      console.error('Error code:', dbError.code)
+      console.error('Error message:', dbError.message)
+      console.error('Error details:', dbError.details)
+      console.error('Error hint:', dbError.hint)
+      throw dbError
+    }
+
+    console.log('Database insert successful:', dbData)
+
+    // Reset form and close modal
+    setNewDocument({
+      title: '',
+      description: '',
+      category: '',
+      department: '',
+      file: null
+    })
+    setUploadModal(false)
+
+    // Refresh documents list
+    await fetchDocuments()
+    setSuccess('Document uploaded successfully!')
+    setTimeout(() => setSuccess(''), 3000)
+
+  } catch (error) {
+    console.error('Full error object:', error)
+    setError('Error uploading document: ' + error.message)
+    setTimeout(() => setError(''), 5000)
+  } finally {
+    setUploading(false)
+  }
+}
+
 
   const viewDocument = async (doc) => {
     try {
