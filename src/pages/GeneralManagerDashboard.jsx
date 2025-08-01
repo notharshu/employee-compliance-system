@@ -28,71 +28,70 @@ const GeneralManagerDashboard = () => {
   }, [user, userProfile])
 
   const fetchDepartmentDocuments = async () => {
-    try {
-      setLoading(true)
-      
-      // Fetch documents from the General Manager's department only
-      const { data, error } = await supabase
-        .from('documents')
-        .select(`
+  try {
+    setLoading(true)
+    
+    const { data, error } = await supabase
+      .from('documents')
+      .select(`
+        id,
+        uploaded_by,
+        title,
+        filename,
+        file_path,
+        document_type,
+        department,
+        description,
+        status,
+        created_at,
+        rejection_reason,
+        approved_at,
+        approved_by,
+        uploaded_by_profile:profiles!uploaded_by (
           id,
-          uploaded_by,
-          title,
-          filename,
-          file_path,
-          document_type,
-          department,
-          description,
-          status,
-          created_at,
-          rejection_reason,
-          approved_at,
-          approved_by,
-          uploaded_by_profile:profiles!documents_uploaded_by_fkey (
-            id,
-            first_name,
-            last_name,
-            email,
-            designation,
-            department
-          ),
-          approved_by_profile:profiles!documents_approved_by_fkey (
-            id,
-            first_name,
-            last_name,
-            email
-          )
-        `)
-        .eq('department', userProfile.department) // Only documents from GM's department
-        .order('created_at', { ascending: false })
+          first_name,
+          last_name,
+          email,
+          designation,
+          department
+        ),
+        approved_by_profile:profiles!approved_by (
+          id,
+          first_name,
+          last_name,
+          email
+        )
+      `)
+      .eq('department', userProfile.department)
+      .order('created_at', { ascending: false })
 
-      if (error) {
-        console.error('Error fetching documents:', error)
-        throw error
-      }
-
-      console.log('Fetched department documents:', data)
-      setDocuments(data || [])
-
-      // Calculate stats
-      const totalDocs = data?.length || 0
-      const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
-      const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
-      const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
-
-      setStats({
-        total: totalDocs,
-        pending: pendingDocs,
-        approved: approvedDocs,
-        rejected: rejectedDocs
-      })
-    } catch (error) {
+    if (error) {
       console.error('Error fetching documents:', error)
-      alert('Error loading documents: ' + error.message)
-    } finally {
-      setLoading(false)
+      throw error
     }
+
+    console.log('Fetched department documents:', data)
+    setDocuments(data || [])
+
+    // Calculate stats
+    const totalDocs = data?.length || 0
+    const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
+    const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
+    const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+
+    setStats({
+      total: totalDocs,
+      pending: pendingDocs,
+      approved: approvedDocs,
+      rejected: rejectedDocs
+    })
+  } catch (error) {
+    console.error('Error fetching documents:', error)
+    alert('Error loading documents: ' + error.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleReviewDocument = async (action) => {
     if (!selectedDocument) return
