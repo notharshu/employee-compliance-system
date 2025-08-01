@@ -31,25 +31,58 @@ const fetchDepartmentDocuments = async () => {
   try {
     setLoading(true)
     
-    console.log('Fetching documents for department:', userProfile.department)
+    console.log('Fetching documents for department:', userProfile?.department)
     
-    const { data, error } = await supabase.rpc('get_documents_with_profiles', {
-      dept: userProfile.department
-    })
+    // Get documents first
+    const { data: docs, error: docsError } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('department', userProfile.department)
+      .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('RPC error:', error)
-      throw error
+    if (docsError) throw docsError
+
+    console.log('Found documents:', docs)
+
+    // For each document, fetch the profile separately
+    const documentsWithProfiles = []
+    
+    for (const doc of docs) {
+      let profile = null
+      
+      if (doc.uploaded_by) {
+        console.log('Fetching profile for uploaded_by:', doc.uploaded_by)
+        
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, email, designation, department')
+          .eq('id', doc.uploaded_by)
+          .maybeSingle()
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError)
+        } else if (profileData) {
+          console.log('Found profile:', profileData)
+          profile = profileData
+        } else {
+          console.log('No profile found for ID:', doc.uploaded_by)
+        }
+      }
+
+      documentsWithProfiles.push({
+        ...doc,
+        uploaded_by_profile: profile
+      })
     }
 
-    console.log('RPC result:', data)
-    setDocuments(data || [])
+    console.log('Final documents with profiles:', documentsWithProfiles)
+    setDocuments(documentsWithProfiles)
 
     // Calculate stats
-    const totalDocs = data?.length || 0
-    const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
-    const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
-    const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+    const totalDocs = documentsWithProfiles.length || 0
+    const pendingDocs = documentsWithProfiles.filter(doc => doc.status === 'pending').length || 0
+    const approvedDocs = documentsWithProfiles.filter(doc => doc.status === 'approved').length || 0
+    const rejectedDocs = documentsWithProfiles.filter(doc => doc.status === 'rejected').length || 0
 
     setStats({
       total: totalDocs,
