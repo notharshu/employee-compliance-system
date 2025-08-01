@@ -18,10 +18,10 @@ const EmployeeDocuments = () => {
   const fetchEmployeeAndDocuments = async () => {
     try {
       setLoading(true);
-      
-      // Fetch employee details
+
+      // Fetch employee details from profiles table
       const { data: employeeData, error: employeeError } = await supabase
-        .from('employees')
+        .from('profiles')
         .select('*')
         .eq('id', id)
         .single();
@@ -29,12 +29,22 @@ const EmployeeDocuments = () => {
       if (employeeError) throw employeeError;
       setEmployee(employeeData);
 
-      // Fetch documents for this employee
+      // Fetch documents for this employee with profile info
       const { data: documentsData, error: documentsError } = await supabase
         .from('documents')
-        .select('*')
-        .eq('employee_id', id)
-        .order('uploaded_at', { ascending: false });
+        .select(`
+          *,
+          uploaded_by_profile:profiles!uploaded_by (
+            id,
+            first_name,
+            last_name,
+            email,
+            designation,
+            department
+          )
+        `)
+        .eq('uploaded_by', id)
+        .order('created_at', { ascending: false });
 
       if (documentsError) throw documentsError;
       setDocuments(documentsData || []);
@@ -53,7 +63,7 @@ const EmployeeDocuments = () => {
     };
 
     return (
-      <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusColors[status] || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+      <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusColors[status] || statusColors.pending}`}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
@@ -82,12 +92,12 @@ const EmployeeDocuments = () => {
       if (error) throw error;
 
       const url = URL.createObjectURL(data);
-      const a = document.createElement('a');
+      const a = window.document.createElement('a');
       a.href = url;
-      a.download = document.file_name;
-      document.body.appendChild(a);
+      a.download = document.filename; // Fixed: use filename not file_name
+      window.document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      window.document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading file:', error);
@@ -99,10 +109,9 @@ const EmployeeDocuments = () => {
     try {
       const { data, error } = await supabase.storage
         .from('documents')
-        .createSignedUrl(document.file_path, 300);
+        .createSignedUrl(document.file_path, 300, { download: false });
 
       if (error) throw error;
-
       window.open(data.signedUrl, '_blank');
     } catch (error) {
       console.error('Error viewing file:', error);
@@ -112,15 +121,15 @@ const EmployeeDocuments = () => {
 
   const filteredDocuments = documents.filter(doc => {
     if (filterStatus === 'all') return true;
-    return doc.approval_status === filterStatus;
+    return doc.status === filterStatus; // Fixed: use status not approval_status
   });
 
   const getStatusCounts = () => {
     return {
       all: documents.length,
-      approved: documents.filter(doc => doc.approval_status === 'approved').length,
-      pending: documents.filter(doc => doc.approval_status === 'pending').length,
-      rejected: documents.filter(doc => doc.approval_status === 'rejected').length
+      approved: documents.filter(doc => doc.status === 'approved').length,
+      pending: documents.filter(doc => doc.status === 'pending').length,
+      rejected: documents.filter(doc => doc.status === 'rejected').length
     };
   };
 
@@ -141,7 +150,7 @@ const EmployeeDocuments = () => {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Employee Not Found</h2>
           <button
             onClick={() => navigate('/employees')}
-            className="text-blue-600 hover:text-blue-500 font-medium"
+            className="text-blue-600 hover:text-blue-800"
           >
             ← Back to Employees
           </button>
@@ -151,146 +160,141 @@ const EmployeeDocuments = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/employees')}
-                className="flex items-center text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <FiArrowLeft className="h-5 w-5 mr-2" />
-                Back to Employees
-              </button>
-              <div className="h-6 border-l border-gray-300"></div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {employee.first_name} {employee.last_name}
-                </h1>
-                <p className="text-sm text-gray-600">
-                  {employee.email} • {employee.role} • {employee.department}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Status Filter Tabs */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">Documents</h2>
-            <div className="flex items-center space-x-2">
-              <FiFilter className="h-5 w-5 text-gray-400" />
-              <span className="text-sm text-gray-600">Filter by status:</span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/employees')}
+            className="mb-4 flex items-center text-blue-600 hover:text-blue-800"
+          >
+            <FiArrowLeft className="mr-2" />
+            Back to Employees
+          </button>
           
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-            {[
-              { key: 'all', label: `All (${statusCounts.all})` },
-              { key: 'approved', label: `Approved (${statusCounts.approved})` },
-              { key: 'pending', label: `Pending (${statusCounts.pending})` },
-              { key: 'rejected', label: `Rejected (${statusCounts.rejected})` }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setFilterStatus(key)}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  filterStatus === key
-                    ? 'bg-white text-blue-600 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Documents Grid */}
-        {filteredDocuments.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">📄</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {filterStatus === 'all' ? 'No documents found' : `No ${filterStatus} documents`}
-            </h3>
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              {employee.first_name} {employee.last_name}'s Documents
+            </h1>
             <p className="text-gray-600">
-              {filterStatus === 'all' 
-                ? 'This employee hasn\'t uploaded any documents yet.'
-                : `This employee has no ${filterStatus} documents.`}
+              {employee.email} • {employee.designation} • {employee.department}
             </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredDocuments.map((document) => (
-              <div key={document.id} className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="text-2xl">
-                        {getDocumentTypeIcon(document.file_type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-gray-900 truncate">
-                          {document.file_name}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {document.document_type}
-                        </p>
-                      </div>
-                    </div>
-                    {getStatusBadge(document.approval_status)}
-                  </div>
+        </div>
 
-                  {document.description && (
-                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                      {document.description}
-                    </p>
-                  )}
-
-                  <div className="space-y-2 text-xs text-gray-500 mb-4">
-                    <div>
-                      Uploaded: {new Date(document.uploaded_at).toLocaleDateString()}
-                    </div>
-                    {document.reviewed_at && (
-                      <div>
-                        Reviewed: {new Date(document.reviewed_at).toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-
-                  {document.review_notes && (
-                    <div className="mb-4 p-3 bg-gray-50 rounded-md">
-                      <p className="text-xs font-medium text-gray-700 mb-1">Review Notes:</p>
-                      <p className="text-sm text-gray-600">{document.review_notes}</p>
-                    </div>
-                  )}
-
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleView(document)}
-                      className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-                    >
-                      <FiEye className="h-4 w-4 mr-1" />
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleDownload(document)}
-                      className="flex-1 flex items-center justify-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <FiDownload className="h-4 w-4 mr-1" />
-                      Download
-                    </button>
-                  </div>
-                </div>
-              </div>
+        {/* Filter tabs */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm p-6">
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+            {['all', 'approved', 'pending', 'rejected'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  filterStatus === status
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {status.charAt(0).toUpperCase() + status.slice(1)} ({statusCounts[status]})
+              </button>
             ))}
           </div>
-        )}
+        </div>
+
+        {/* Documents table */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          {filteredDocuments.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 text-6xl mb-4">📄</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No documents found</h3>
+              <p className="text-gray-500">
+                {filterStatus === 'all' ? 
+                  'This employee hasn\'t uploaded any documents yet.' : 
+                  `This employee has no ${filterStatus} documents.`
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Document
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Uploaded
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredDocuments.map((document) => (
+                    <tr key={document.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <span className="text-2xl mr-3">
+                            {getDocumentTypeIcon(document.file_type)}
+                          </span>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {document.title}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {document.filename}
+                            </div>
+                            {document.description && (
+                              <div className="text-sm text-gray-500 mt-1">
+                                {document.description}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                          {document.category}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(document.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(document.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => handleView(document)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="View Document"
+                          >
+                            <FiEye />
+                          </button>
+                          <button
+                            onClick={() => handleDownload(document)}
+                            className="text-green-600 hover:text-green-900"
+                            title="Download Document"
+                          >
+                            <FiDownload />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
