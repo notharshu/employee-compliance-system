@@ -39,7 +39,7 @@ const CompanyPolicies = () => {
     try {
       setLoading(true)
       const { data, error } = await supabase
-        .from('policies')
+        .from('company_policies')
         .select('*')
         .order('created_at', { ascending: false })
 
@@ -100,7 +100,7 @@ const CompanyPolicies = () => {
       const fileName = `policies/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
-        .from('policies')
+        .from('company_policies')
         .upload(fileName, newPolicy.file)
 
       if (uploadError) {
@@ -177,7 +177,7 @@ const CompanyPolicies = () => {
 
       // Delete from database first
       const { error: dbError } = await supabase
-        .from('policies')
+        .from('company_policies')
         .delete()
         .eq('id', policy.id)
 
