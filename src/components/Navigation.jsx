@@ -34,10 +34,10 @@ const Navigation = () => {
   const canViewEmployees = userProfile?.designation === 'general_manager' || userProfile?.designation === 'manager'
 
   return (
-    <nav className="bg-white shadow px-8 py-4 flex items-center justify-between">
+    <nav className="bg-gradient-to-r from-slate-50 via-cyan-100 to-sky-200 shadow px-8 py-4 flex items-center justify-between">
       {/* Logo */}
       <Link to="/dashboard" className="flex items-center">
-        <img className="h-12 w-auto" src={CompanyLogo} alt="Company Logo" />
+        <img className="h-8 w-auto" src={CompanyLogo} alt="Company Logo" />
       </Link>
 
       {/* Navigation Links */}
