@@ -135,7 +135,7 @@ const Login = () => {
 
       {/* Right Panel - Background Image */}
       <div className="flex-1 hidden lg:flex items-center justify-center backdrop-blur opacity-80 rounded-l-2xl bg-gradient-to-br from-secondary-50 to-gray-100">
-        <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: 'url(/path-to-your-image.jpg)' }}></div>
+        <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: 'url(/assets/login_bg.jpg)' }}></div>
       </div>
     </div>
   )
