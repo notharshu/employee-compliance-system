@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
 import Logo from '../components/Logo'
+import loginBg from '../assets/login_bg.jpg'
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -135,7 +136,7 @@ const Login = () => {
 
       {/* Right Panel - Background Image */}
       <div className="flex-1 hidden lg:flex items-center justify-center backdrop-blur opacity-80 rounded-l-2xl bg-gradient-to-br from-secondary-50 to-gray-100">
-        <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: 'url(/assets/login_bg.jpg)' }}></div>
+        <div className="w-full h-full bg-cover bg-center" style={{ backgroundImage: `url(${loginBg})` }}></div>
       </div>
     </div>
   )
