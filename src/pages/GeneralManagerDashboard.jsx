@@ -27,57 +27,50 @@ const GeneralManagerDashboard = () => {
     }
   }, [user, userProfile])
 
-  const fetchDepartmentDocuments = async () => {
+const fetchDepartmentDocuments = async () => {
   try {
     setLoading(true)
     
-    const { data, error } = await supabase
+    // Step 1: Get documents
+    const { data: documents, error: docsError } = await supabase
       .from('documents')
-      .select(`
-        id,
-        uploaded_by,
-        title,
-        filename,
-        file_path,
-        document_type,
-        department,
-        description,
-        status,
-        created_at,
-        rejection_reason,
-        approved_at,
-        approved_by,
-        profiles!documents_uploaded_by_fkey (
-          id,
-          first_name,
-          last_name,
-          email,
-          designation,
-          department
-        )
-      `)
+      .select('*')
       .eq('department', userProfile.department)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching documents:', error)
-      throw error
-    }
+    if (docsError) throw docsError
 
-    // Transform the data to match your expected structure
-    const transformedData = data?.map(doc => ({
+    // Step 2: Get all unique uploader IDs
+    const uploaderIds = [...new Set(documents.map(doc => doc.uploaded_by).filter(Boolean))]
+    
+    // Step 3: Fetch all profiles at once
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email, designation, department')
+      .in('id', uploaderIds)
+
+    if (profilesError) throw profilesError
+
+    // Step 4: Create a profile lookup map
+    const profileMap = {}
+    profiles.forEach(profile => {
+      profileMap[profile.id] = profile
+    })
+
+    // Step 5: Combine documents with profiles
+    const documentsWithProfiles = documents.map(doc => ({
       ...doc,
-      uploaded_by_profile: doc.profiles?.[0] || null
-    })) || []
+      uploaded_by_profile: profileMap[doc.uploaded_by] || null
+    }))
 
-    console.log('Fetched department documents:', transformedData)
-    setDocuments(transformedData)
+    console.log('Final documents with profiles:', documentsWithProfiles)
+    setDocuments(documentsWithProfiles)
 
     // Calculate stats
-    const totalDocs = transformedData?.length || 0
-    const pendingDocs = transformedData?.filter(doc => doc.status === 'pending').length || 0
-    const approvedDocs = transformedData?.filter(doc => doc.status === 'approved').length || 0
-    const rejectedDocs = transformedData?.filter(doc => doc.status === 'rejected').length || 0
+    const totalDocs = documentsWithProfiles.length || 0
+    const pendingDocs = documentsWithProfiles.filter(doc => doc.status === 'pending').length || 0
+    const approvedDocs = documentsWithProfiles.filter(doc => doc.status === 'approved').length || 0
+    const rejectedDocs = documentsWithProfiles.filter(doc => doc.status === 'rejected').length || 0
 
     setStats({
       total: totalDocs,
