@@ -47,19 +47,13 @@ const GeneralManagerDashboard = () => {
         rejection_reason,
         approved_at,
         approved_by,
-        uploaded_by_profile:profiles!uploaded_by (
+        profiles!documents_uploaded_by_fkey (
           id,
           first_name,
           last_name,
           email,
           designation,
           department
-        ),
-        approved_by_profile:profiles!approved_by (
-          id,
-          first_name,
-          last_name,
-          email
         )
       `)
       .eq('department', userProfile.department)
@@ -70,14 +64,20 @@ const GeneralManagerDashboard = () => {
       throw error
     }
 
-    console.log('Fetched department documents:', data)
-    setDocuments(data || [])
+    // Transform the data to match your expected structure
+    const transformedData = data?.map(doc => ({
+      ...doc,
+      uploaded_by_profile: doc.profiles?.[0] || null
+    })) || []
+
+    console.log('Fetched department documents:', transformedData)
+    setDocuments(transformedData)
 
     // Calculate stats
-    const totalDocs = data?.length || 0
-    const pendingDocs = data?.filter(doc => doc.status === 'pending').length || 0
-    const approvedDocs = data?.filter(doc => doc.status === 'approved').length || 0
-    const rejectedDocs = data?.filter(doc => doc.status === 'rejected').length || 0
+    const totalDocs = transformedData?.length || 0
+    const pendingDocs = transformedData?.filter(doc => doc.status === 'pending').length || 0
+    const approvedDocs = transformedData?.filter(doc => doc.status === 'approved').length || 0
+    const rejectedDocs = transformedData?.filter(doc => doc.status === 'rejected').length || 0
 
     setStats({
       total: totalDocs,
