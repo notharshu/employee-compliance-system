@@ -119,7 +119,8 @@ const CompanyPolicies = () => {
         file_size: newPolicy.file.size,
         file_type: newPolicy.file.type,
         uploaded_by: user.id,
-        status: 'active'
+        status: 'active',
+        department: 'Policies'
       }
 
       const { error: dbError } = await supabase
