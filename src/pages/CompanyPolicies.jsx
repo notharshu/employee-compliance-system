@@ -25,7 +25,13 @@ const CompanyPolicies = () => {
 
   // Define categories
   const categories = [
-    'hr', 'safety', 'compliance', 'operations', 'finance', 'legal', 'general'
+  'HR',
+  'Safety',
+  'Compliance',
+  'Operations',
+  'Finance',
+  'Legal',
+  'General'
   ]
 
   // Check if user can upload policies (General Manager only)
@@ -119,8 +125,8 @@ const CompanyPolicies = () => {
         file_size: newPolicy.file.size,
         file_type: newPolicy.file.type,
         uploaded_by: user.id,
-        status: 'active',
-        department: 'Other'
+        status: 'active'
+        department: 'Policies'
       }
 
       const { error: dbError } = await supabase
