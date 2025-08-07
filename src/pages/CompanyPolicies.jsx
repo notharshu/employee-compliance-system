@@ -41,6 +41,7 @@ const CompanyPolicies = () => {
       const { data, error } = await supabase
         .from('documents')
         .select('*')
+        .ilike('file_path', 'policies/%')
         .order('created_at', { ascending: false })
 
       if (error) throw error
