@@ -39,7 +39,7 @@ const CompanyPolicies = () => {
     try {
       setLoading(true)
       const { data, error } = await supabase
-        .from('company_policies')
+        .from('documents')
         .select('*')
         .order('created_at', { ascending: false })
 
@@ -100,7 +100,7 @@ const CompanyPolicies = () => {
       const fileName = `policies/${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
-        .from('company_policies')
+        .from('documents')
         .upload(fileName, newPolicy.file)
 
       if (uploadError) {
@@ -122,7 +122,7 @@ const CompanyPolicies = () => {
       }
 
       const { error: dbError } = await supabase
-        .from('policies')
+        .from('documents')
         .insert(insertData)
 
       if (dbError) {
@@ -156,7 +156,7 @@ const CompanyPolicies = () => {
   const handleViewPolicy = async (policy) => {
     try {
       const { data, error } = await supabase.storage
-        .from('policies')
+        .from('documents')
         .createSignedUrl(policy.file_path, 300, { download: false })
 
       if (error) throw error
@@ -177,7 +177,7 @@ const CompanyPolicies = () => {
 
       // Delete from database first
       const { error: dbError } = await supabase
-        .from('company_policies')
+        .from('documents')
         .delete()
         .eq('id', policy.id)
 
@@ -188,7 +188,7 @@ const CompanyPolicies = () => {
       // Delete from storage
       if (policy.file_path) {
         const { error: storageError } = await supabase.storage
-          .from('policies')
+          .from('documents')
           .remove([policy.file_path])
 
         if (storageError) {

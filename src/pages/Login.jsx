@@ -21,7 +21,6 @@ const Login = () => {
     try {
       const { error } = await signIn(email, password)
       if (error) {
-        // Check if the error is due to unconfirmed email
         if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
           setError(
             <div>
